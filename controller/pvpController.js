@@ -5,9 +5,7 @@ const {
 const { GameRoomManager } = require("../services/GameRoomManager");
 const { PlayerManager } = require("../services/PlayerManager");
 const { QuestionService } = require("../services/QuestionService");
-const {
-  PVPChallengeController,
-} = require("./pvpChallengeController");
+const { PVPChallengeController } = require("./pvpChallengeController");
 const { getRedisClient } = require("../config/redis");
 
 module.exports = function registerSocketHandlers(io, app) {
@@ -16,7 +14,7 @@ module.exports = function registerSocketHandlers(io, app) {
   const gameRoomManager = new GameRoomManager(questionService, io);
   const matchmakingService = new RedisMatchmakingService(
     playerManager,
-    gameRoomManager
+    gameRoomManager,
   );
 
   // ✅ Initialize Challenge Controller
@@ -24,7 +22,7 @@ module.exports = function registerSocketHandlers(io, app) {
     io,
     playerManager,
     gameRoomManager,
-    questionService
+    questionService,
   );
 
   // ✅ Store in app.locals for route access
@@ -88,79 +86,76 @@ module.exports = function registerSocketHandlers(io, app) {
     /* ========================================
        JOIN LOBBY & START MATCHMAKING
     ======================================== */
-   socket.on("join-lobby", async (lobbyData) => {
-     try {
-       const player = playerManager.getPlayer(socket.id);
+    socket.on("join-lobby", async (lobbyData) => {
+      try {
+        const player = playerManager.getPlayer(socket.id);
 
-       if (!player) {
-         throw new Error("Player not registered");
-       }
+        if (!player) {
+          throw new Error("Player not registered");
+        }
 
-       // 🔥 UPDATE PLAYER GAME DYNAMICS HERE
-       playerManager.updatePlayerGamePreferences(socket.id, {
-         diff: lobbyData.diff,
-         timer: lobbyData.timer,
-         symbol: lobbyData.symbol,
-         rating: lobbyData.rating,
-       });
+        // 🔥 UPDATE PLAYER GAME DYNAMICS HERE
+        playerManager.updatePlayerGamePreferences(socket.id, {
+          diff: lobbyData.diff,
+          timer: lobbyData.timer,
+          symbol: lobbyData.symbol,
+          rating: lobbyData.rating,
+        });
 
-       socket.join(socket.id);
+        socket.join(socket.id);
 
-       socket.emit("lobby-joined", {
-         success: true,
-         player: {
-           id: player.id,
-           socketId: player.socketId,
-           username: player.username,
-           rating: player.rating,
-           diff: player.diff,
-           timer: player.timer,
-           symbol: player.symbol,
-         },
-       });
+        socket.emit("lobby-joined", {
+          success: true,
+          player: {
+            id: player.id,
+            socketId: player.socketId,
+            username: player.username,
+            rating: player.rating,
+            diff: player.diff,
+            timer: player.timer,
+            symbol: player.symbol,
+          },
+        });
 
-       console.log(
-         `🎯 ${player.username} joined lobby | Rating:${player.rating} | Diff:${player.diff} | Timer:${player.timer}`
-       );
+        console.log(
+          `🎯 ${player.username} joined lobby | Rating:${player.rating} | Diff:${player.diff} | Timer:${player.timer}`,
+        );
 
-       await matchmakingService.findMatch(player, (gameRoom) => {
-         const players = gameRoom.getPlayers();
+        await matchmakingService.findMatch(player, (gameRoom) => {
+          const players = gameRoom.getPlayers();
 
-         players.forEach((p) => {
-           const opponent = players.find((x) => x.id !== p.id);
+          players.forEach((p) => {
+            const opponent = players.find((x) => x.id !== p.id);
 
-           io.to(p.socketId).emit("match-found", {
-             gameRoom: gameRoom.getPublicData(),
-             opponent: {
-               id: opponent.id,
-               username: opponent.username,
-               rating: opponent.rating,
-             },
-             myPlayerId: p.id,
-             initialQuestionMeter: gameRoom.questionMeter,
-           });
-         });
+            io.to(p.socketId).emit("match-found", {
+              gameRoom: gameRoom.getPublicData(),
+              opponent: {
+                id: opponent.id,
+                username: opponent.username,
+                rating: opponent.rating,
+              },
+              myPlayerId: p.id,
+              initialQuestionMeter: gameRoom.questionMeter,
+            });
+          });
 
-         setTimeout(() => {
-           gameRoom.startGame();
+          setTimeout(() => {
+            gameRoom.startGame();
 
-           players.forEach((p) => {
-             io.to(p.socketId).emit("game-started", {
-               gameState: gameRoom.getGameState(),
-               currentQuestion: gameRoom.getCurrentQuestion(),
-               myPlayerId: p.id,
-             });
-           });
-         }, 3000);
-       });
-     } catch (error) {
-       console.error("❌ join-lobby error:", error);
-       socket.emit("error", { message: error.message });
-     }
-   });
-
-
-
+            players.forEach((p) => {
+              io.to(p.socketId).emit("game-started", {
+                gameState: gameRoom.getGameState(),
+                currentQuestion: gameRoom.getCurrentQuestion(),
+                myPlayerId: p.id,
+              });
+            });
+          }, 3000);
+        });
+      } catch (error) {
+        console.error("❌ join-lobby error:", error);
+        socket.emit("error", { message: error.message });
+      }
+    });
 
     /* ========================================
        CHALLENGE SYSTEM SOCKET HANDLERS
@@ -190,7 +185,7 @@ module.exports = function registerSocketHandlers(io, app) {
         const result = await challengeController.sendChallenge(
           socket.id,
           targetIdentifier,
-          customSettings
+          customSettings,
         );
 
         socket.emit("challenge-sent-success", result);
@@ -213,7 +208,7 @@ module.exports = function registerSocketHandlers(io, app) {
 
         const result = await challengeController.acceptChallenge(
           socket.id,
-          data.challengeId
+          data.challengeId,
         );
 
         socket.emit("challenge-accepted-success", result);
@@ -237,7 +232,7 @@ module.exports = function registerSocketHandlers(io, app) {
 
         const result = await challengeController.declineChallenge(
           socket.id,
-          data.challengeId
+          data.challengeId,
         );
 
         socket.emit("challenge-declined-success", result);
@@ -261,7 +256,7 @@ module.exports = function registerSocketHandlers(io, app) {
 
         const result = await challengeController.cancelChallenge(
           socket.id,
-          data.challengeId
+          data.challengeId,
         );
 
         socket.emit("challenge-cancelled-success", result);
@@ -367,6 +362,82 @@ module.exports = function registerSocketHandlers(io, app) {
     });
 
     /* ========================================
+       SEND EMOJI DURING MATCH
+    ======================================== */
+    socket.on("send-emoji", async (data) => {
+      try {
+        const player = playerManager.getPlayer(socket.id);
+        if (!player) throw new Error("Player not found");
+
+        const gameRoom = gameRoomManager.getPlayerGameRoom(player.id);
+        if (!gameRoom) throw new Error("Game room not found");
+
+        if (gameRoom.gameState !== "active") {
+          throw new Error("Can only send emoji during active game");
+        }
+
+        const result = gameRoom.sendEmojiToOpponent(player.id, data.emoji);
+
+        if (!result.success) {
+          if (result.message.includes("Invalid")) {
+            socket.emit("emoji-invalid", { message: result.message });
+          } else {
+            socket.emit("emoji-rate-limited", { message: result.message });
+          }
+        }
+      } catch (error) {
+        console.error("❌ send-emoji error:", error);
+        socket.emit("error", { message: error.message });
+      }
+    });
+
+    /* ========================================
+       RECONNECT TO GAME (GRACE PERIOD)
+    ======================================== */
+    socket.on("reconnect-to-game", async (data) => {
+      try {
+        const player = playerManager.getPlayer(socket.id);
+        if (!player) throw new Error("Player not found");
+
+        const gameRoom = gameRoomManager.getPlayerGameRoom(player.id);
+        if (!gameRoom) throw new Error("Game room not found");
+
+        // Try to reconnect during grace period
+        const reconnected = await gameRoom.handlePlayerReconnect(player.id);
+
+        if (reconnected) {
+          player.socketId = socket.id; // Update socket ID
+          player.isInGame = true;
+
+          // Send game state to reconnected player
+          socket.emit("game-reconnected", {
+            message: "Successfully reconnected to game!",
+            gameState: gameRoom.getGameState(),
+            currentQuestion: gameRoom.getCurrentQuestion(),
+            myPlayerId: player.id,
+          });
+
+          const opponent = gameRoom.getOpposingPlayer(player.id);
+          if (opponent && opponent.socketId) {
+            io.to(opponent.socketId).emit("opponent-reconnected", {
+              message: `${player.username} has reconnected!`,
+              gameState: gameRoom.getGameState(),
+            });
+          }
+
+          console.log(`✅ ${player.username} successfully reconnected`);
+        } else {
+          socket.emit("reconnect-failed", {
+            message: "Grace period expired. Game ended.",
+          });
+        }
+      } catch (error) {
+        console.error("❌ reconnect-to-game error:", error);
+        socket.emit("error", { message: error.message });
+      }
+    });
+
+    /* ========================================
        GET GAME STATE
     ======================================== */
     socket.on("get-game-state", () => {
@@ -408,14 +479,31 @@ module.exports = function registerSocketHandlers(io, app) {
         console.log(`🏁 Game ended for room: ${gameRoom.id}`);
 
         // End the game if not already ended
-        if (gameRoom.gameState !== "completed") {
+        if (
+          gameRoom.gameState !== "completed" &&
+          gameRoom.gameState !== "post-game"
+        ) {
           await gameRoom.endGame();
         }
 
-        // ✅ CRITICAL: Clean up the game room
-        gameRoomManager.removeGameRoom(gameRoom.id);
+        // ✅ TRANSITION TO POST-GAME LOBBY (don't remove room yet)
+        if (gameRoom.gameState === "completed") {
+          const postGameStatus = await gameRoom.transitionToPostGameLobby();
 
-        console.log(`✅ Game cleanup complete for ${player.username}`);
+          // Notify both players about post-game state
+          gameRoom.getPlayers().forEach((p) => {
+            io.to(p.socketId).emit("post-game-started", {
+              message: postGameStatus.message,
+              gameResults: gameRoom.getGameState(),
+              opponent: gameRoom.getPlayers().find((x) => x.id !== p.id),
+              rematchStatus: gameRoom.getRematchStatus(),
+            });
+          });
+
+          console.log(
+            `✅ Game transitioned to post-game lobby for ${player.username}`,
+          );
+        }
       } catch (error) {
         console.error("❌ game-ended error:", error);
       }
@@ -435,6 +523,212 @@ module.exports = function registerSocketHandlers(io, app) {
         });
       } catch (error) {
         console.error("❌ get-queue-status error:", error);
+        socket.emit("error", { message: error.message });
+      }
+    });
+
+    /* ========================================
+       REMATCH SYSTEM
+    ======================================== */
+
+    /**
+     * REQUEST REMATCH
+     * Client sends: { }
+     */
+    socket.on("request-rematch", async () => {
+      try {
+        const player = playerManager.getPlayer(socket.id);
+        if (!player) throw new Error("Player not found");
+
+        const gameRoom = gameRoomManager.getPlayerGameRoom(player.id);
+        if (!gameRoom) throw new Error("Game room not found");
+
+        if (gameRoom.gameState !== "post-game") {
+          throw new Error(
+            "Cannot request rematch - game not in post-game state",
+          );
+        }
+
+        const result = await gameRoom.requestRematch(player.id);
+
+        // Notify both players
+        gameRoom.getPlayers().forEach((p) => {
+          io.to(p.socketId).emit("rematch-requested", {
+            requestedBy: player.username,
+            rematchStatus: gameRoom.getRematchStatus(),
+          });
+        });
+
+        console.log(
+          `📢 Rematch requested by ${player.username} in room ${gameRoom.id}`,
+        );
+      } catch (error) {
+        console.error("❌ request-rematch error:", error);
+        socket.emit("error", { message: error.message });
+      }
+    });
+
+    /**
+     * ACCEPT REMATCH
+     * Client sends: { }
+     */
+    socket.on("accept-rematch", async () => {
+      try {
+        const player = playerManager.getPlayer(socket.id);
+        if (!player) throw new Error("Player not found");
+
+        const gameRoom = gameRoomManager.getPlayerGameRoom(player.id);
+        if (!gameRoom) throw new Error("Game room not found");
+
+        if (!gameRoom.rematchRequested) {
+          throw new Error("No rematch request pending");
+        }
+
+        const result = await gameRoom.acceptRematch(player.id);
+
+        // Notify both players
+        gameRoom.getPlayers().forEach((p) => {
+          io.to(p.socketId).emit("rematch-status-update", {
+            acceptedBy: player.username,
+            rematchStatus: gameRoom.getRematchStatus(),
+          });
+        });
+
+        // If both players accepted, prepare for new game
+        if (result.allAccepted) {
+          console.log(`🎮 Both players accepted rematch! Creating new game...`);
+
+          // Reset game for rematch
+          gameRoom.resetForRematch();
+
+          // Notify players that new game is starting
+          gameRoom.getPlayers().forEach((p) => {
+            io.to(p.socketId).emit("rematch-accepted", {
+              message: "Rematch accepted by both players!",
+              gameState: gameRoom.getGameState(),
+            });
+          });
+
+          // Start the rematch game after 3 seconds
+          setTimeout(() => {
+            gameRoom.startGame();
+
+            gameRoom.getPlayers().forEach((p) => {
+              io.to(p.socketId).emit("game-started", {
+                gameState: gameRoom.getGameState(),
+                currentQuestion: gameRoom.getCurrentQuestion(),
+                myPlayerId: p.id,
+                isRematch: true,
+              });
+            });
+
+            console.log(`🎮 Rematch game started for room ${gameRoom.id}`);
+          }, 3000);
+        }
+      } catch (error) {
+        console.error("❌ accept-rematch error:", error);
+        socket.emit("error", { message: error.message });
+      }
+    });
+
+    /**
+     * DECLINE REMATCH
+     * Client sends: { }
+     */
+    socket.on("decline-rematch", async () => {
+      try {
+        const player = playerManager.getPlayer(socket.id);
+        if (!player) throw new Error("Player not found");
+
+        const gameRoom = gameRoomManager.getPlayerGameRoom(player.id);
+        if (!gameRoom) throw new Error("Game room not found");
+
+        const result = await gameRoom.declineRematch(player.id);
+
+        // Notify both players
+        gameRoom.getPlayers().forEach((p) => {
+          io.to(p.socketId).emit("rematch-declined", {
+            declinedBy: player.username,
+            message: result.message,
+          });
+        });
+
+        console.log(
+          `❌ Rematch declined by ${player.username} in room ${gameRoom.id}`,
+        );
+      } catch (error) {
+        console.error("❌ decline-rematch error:", error);
+        socket.emit("error", { message: error.message });
+      }
+    });
+
+    /**
+     * GET REMATCH STATUS
+     * Client sends: { }
+     */
+    socket.on("get-rematch-status", () => {
+      try {
+        const player = playerManager.getPlayer(socket.id);
+        if (!player) throw new Error("Player not found");
+
+        const gameRoom = gameRoomManager.getPlayerGameRoom(player.id);
+        if (!gameRoom) throw new Error("Game room not found");
+
+        socket.emit("rematch-status", {
+          gameState: gameRoom.gameState,
+          rematchStatus: gameRoom.getRematchStatus(),
+          opponent: gameRoom.getPlayers().find((p) => p.id !== player.id),
+        });
+      } catch (error) {
+        console.error("❌ get-rematch-status error:", error);
+        socket.emit("error", { message: error.message });
+      }
+    });
+
+    /**
+     * EXIT POST-GAME LOBBY
+     * Client sends: { }
+     */
+    socket.on("exit-post-game", async () => {
+      try {
+        const player = playerManager.getPlayer(socket.id);
+        if (!player) throw new Error("Player not found");
+
+        const gameRoom = gameRoomManager.getPlayerGameRoom(player.id);
+        if (!gameRoom) throw new Error("Game room not found");
+
+        // Mark player as left
+        player.isInGame = false;
+
+        // Notify opponent
+        const opponent = gameRoom.getOpposingPlayer(player.id);
+        if (opponent && opponent.socketId) {
+          io.to(opponent.socketId).emit("opponent-left-lobby", {
+            message: `${player.username} left the post-game lobby.`,
+          });
+        }
+
+        // Remove game room if both players have left
+        const hasPlayersInLobby = gameRoom
+          .getPlayers()
+          .some((p) => gameRoomManager.getPlayerGameRoom(p.id) !== null);
+
+        if (!hasPlayersInLobby || gameRoom.gameState === "lobby-expired") {
+          gameRoomManager.removeGameRoom(gameRoom.id);
+          console.log(
+            `🗑️ Post-game lobby removed: ${gameRoom.id} (${player.username} exited)`,
+          );
+        }
+
+        socket.emit("exited-post-game", {
+          message: "You have left the post-game lobby.",
+        });
+
+        console.log(
+          `👋 ${player.username} exited post-game lobby for room ${gameRoom.id}`,
+        );
+      } catch (error) {
+        console.error("❌ exit-post-game error:", error);
         socket.emit("error", { message: error.message });
       }
     });
@@ -466,29 +760,37 @@ module.exports = function registerSocketHandlers(io, app) {
       if (gameRoom) {
         console.log(`🎮 ${player.username} was in game room: ${gameRoom.id}`);
 
-        // Handle the disconnect in the game room
-        const gameResults = await gameRoom.handlePlayerDisconnect(player.id);
+        // Check if game is active or waiting
+        if (
+          gameRoom.gameState === "active" ||
+          gameRoom.gameState === "waiting"
+        ) {
+          // ✅ Implement grace period - don't immediately end game
+          const graceResult = await gameRoom.handlePlayerDisconnect(player.id);
+          console.log(`⏳ Grace period started for ${player.username}`);
 
-        // Get the remaining player
-        const remainingPlayer = gameRoom
-          .getPlayers()
-          .find((p) => p.id !== player.id);
+          // Notify opponent
+          const opponent = gameRoom.getOpposingPlayer(player.id);
+          if (opponent && opponent.socketId) {
+            io.to(opponent.socketId).emit("opponent-disconnected", {
+              message: `${player.username} disconnected. Waiting for reconnection (15 seconds)...`,
+              gracePeriodExpired: false,
+              disconnectedPlayerId: player.id,
+            });
+          }
+        } else if (gameRoom.gameState === "post-game") {
+          // Player disconnected during post-game lobby
+          const opponent = gameRoom.getOpposingPlayer(player.id);
+          if (opponent && opponent.socketId) {
+            io.to(opponent.socketId).emit("opponent-left-lobby", {
+              message: `${player.username} left the post-game lobby.`,
+            });
+          }
 
-        if (remainingPlayer && gameResults) {
-          console.log(`🏆 ${remainingPlayer.username} wins by disconnect`);
-
-          io.to(remainingPlayer.socketId).emit("game-ended", {
-            reason: "opponent-disconnect",
-            gameResults: gameResults,
-            message: `${player.username} disconnected. You win!`,
-          });
-
-          console.log(`📤 Sent game-ended to ${remainingPlayer.username}`);
+          // Remove game room
+          gameRoomManager.removeGameRoom(gameRoom.id);
+          console.log(`🗑️ Post-game lobby removed: ${gameRoom.id}`);
         }
-
-        // ✅ CRITICAL: Remove the game room
-        gameRoomManager.removeGameRoom(gameRoom.id);
-        console.log(`🗑️ Game room removed: ${gameRoom.id}`);
       }
 
       // 4. REMOVE PLAYER (with grace period for reconnect)
