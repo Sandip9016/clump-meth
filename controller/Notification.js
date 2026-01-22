@@ -23,7 +23,12 @@ const createNotification = async (req, res) => {
       message,
       status = "draft",
     } = req.body;
-    console.log(req.body);
+
+    console.log(
+      "📝 Creating notification with body:",
+      JSON.stringify(req.body, null, 2),
+    );
+
     // Validation
     if (!type || !["in-app", "push", "popup"].includes(type)) {
       return res.status(400).json({
@@ -39,12 +44,25 @@ const createNotification = async (req, res) => {
       });
     }
 
+    // Validate audience structure
+    if (!audience || !audience.targetType) {
+      return res.status(400).json({
+        success: false,
+        message: "Audience and targetType are required",
+      });
+    }
+
     // Get user count for audience
     const User = require("../models/Player"); // Import your User model
-    const users = await notificationService.getEligibleUsers(
-      audience || { targetType: "all" },
-      User
-    );
+    const users = await notificationService.getEligibleUsers(audience, User);
+
+    console.log(`✅ Found ${users.length} users matching audience criteria`);
+
+    // Normalize audience data
+    const normalizedAudience = {
+      targetType: audience.targetType,
+      filters: audience.targetType === "filtered" ? audience.filters || {} : {},
+    };
 
     const notification = await Notification.create({
       type,
@@ -54,15 +72,18 @@ const createNotification = async (req, res) => {
       timezoneAware: timezoneAware || false,
       isRecurring: isRecurring || false,
       recurringConfig: isRecurring ? recurringConfig : null,
-      audience: audience || { targetType: "all" },
+      audience: normalizedAudience,
       message,
       status,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
 
+    console.log(`📌 Notification created with ID: ${notification._id}`);
+
     // If send type is 'now' and status is not draft, send immediately
     if (sendType === "now" && status !== "draft") {
+      console.log("🚀 sendType is 'now', sending notifications immediately...");
       await notificationService.sendNotifications(notification._id, User);
     }
 
@@ -78,7 +99,7 @@ const createNotification = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Create notification error:", error);
+    console.error("❌ Create notification error:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to create notification",
@@ -91,8 +112,6 @@ const createNotification = async (req, res) => {
  * Send notification immediately
  */
 
-
-
 const sendNotification = async (req, res) => {
   try {
     const { notificationId } = req.params;
@@ -100,7 +119,7 @@ const sendNotification = async (req, res) => {
 
     const result = await notificationService.sendNotifications(
       notificationId,
-      User
+      User,
     );
 
     return res.status(200).json({
@@ -125,7 +144,7 @@ const getInAppNotifications = async (req, res) => {
   try {
     const notifications = await Notification.find({
       type: "in-app",
-      status: "completed", 
+      status: "completed",
     })
       .sort({ createdAt: -1 })
       .select({
@@ -158,8 +177,6 @@ const getInAppNotifications = async (req, res) => {
   }
 };
 
-
-
 /**
  * Get notification analytics
  */
@@ -168,9 +185,8 @@ const getAnalytics = async (req, res) => {
   try {
     const { notificationId } = req.params;
 
-    const analytics = await notificationService.getNotificationAnalytics(
-      notificationId
-    );
+    const analytics =
+      await notificationService.getNotificationAnalytics(notificationId);
 
     return res.status(200).json({
       success: true,
@@ -208,15 +224,15 @@ const getOverallAnalytics = async (req, res) => {
 
     const totalSent = notifications.reduce(
       (sum, n) => sum + n.analytics.totalSent,
-      0
+      0,
     );
     const totalDelivered = notifications.reduce(
       (sum, n) => sum + n.analytics.totalDelivered,
-      0
+      0,
     );
     const totalOpened = notifications.reduce(
       (sum, n) => sum + n.analytics.totalOpened,
-      0
+      0,
     );
     const totalUsers = await Notification.aggregate([
       { $match: matchQuery },
@@ -413,7 +429,7 @@ const stopNotification = async (req, res) => {
 };
 
 // Get delivery logs for a notification
- 
+
 const getDeliveryLogs = async (req, res) => {
   try {
     const { notificationId } = req.params;
@@ -476,7 +492,7 @@ const getDeliveryLogs = async (req, res) => {
 };
 
 //Track notification open (webhook/client call)
- 
+
 const trackOpen = async (req, res) => {
   try {
     const { notificationId, userId } = req.body;
@@ -525,8 +541,7 @@ const retryFailed = async (req, res) => {
 const updateConfig = async (req, res) => {
   try {
     const { maxPushNotificationsPerDay } = req.body;
-    console.log("Jitendra")
-
+    console.log("Jitendra");
 
     let config = await NotificationConfig.findOne();
 

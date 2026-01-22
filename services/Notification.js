@@ -16,19 +16,26 @@ class NotificationService {
 
     if (audienceConfig.targetType === "all") {
       query = {};
-    } else {
+    } else if (
+      audienceConfig.targetType === "filtered" &&
+      audienceConfig.filters
+    ) {
       const filters = audienceConfig.filters;
 
-      // User Type Filter
-      if (filters.userType && filters.userType.length > 0) {
-        query.status = { $in: filters.userType };
+      // User Type Filter (active/inactive) - maps to accountStatus.state
+      if (filters.userTypes && filters.userTypes.length > 0) {
+        query["accountStatus.state"] = { $in: filters.userTypes };
       }
 
-      // User Rating Filter
-      if (filters.userRating && filters.userRating.length > 0) {
-        const ratingConditions = filters.userRating.map((range) => ({
-          rating: { $gte: range.min, $lte: range.max },
-        }));
+      // User Rating Filter - parse range strings like "0-500", "500-1000"
+      if (filters.ratingRanges && filters.ratingRanges.length > 0) {
+        const ratingConditions = filters.ratingRanges.map((range) => {
+          if (range === "1500+") {
+            return { rating: { $gte: 1500 } };
+          }
+          const [min, max] = range.split("-").map(Number);
+          return { rating: { $gte: min, $lte: max } };
+        });
         query.$or = ratingConditions;
       }
 
@@ -38,18 +45,33 @@ class NotificationService {
       }
 
       // Joining Date Filter
-      if (filters.joiningDateRange) {
-        query.createdAt = {
-          $gte: new Date(filters.joiningDateRange.startDate),
-          $lte: new Date(filters.joiningDateRange.endDate),
-        };
+      if (
+        filters.joiningDateRange &&
+        (filters.joiningDateRange.start || filters.joiningDateRange.end)
+      ) {
+        query.createdAt = {};
+        if (filters.joiningDateRange.start) {
+          query.createdAt.$gte = new Date(filters.joiningDateRange.start);
+        }
+        if (filters.joiningDateRange.end) {
+          query.createdAt.$lte = new Date(filters.joiningDateRange.end);
+        }
       }
     }
 
     // Get users with FCM tokens
     query.fcmToken = { $exists: true, $ne: null };
 
-    return await User.find(query).select("_id fcmToken timezone country");
+    console.log(
+      "📋 Notification filter query:",
+      JSON.stringify(query, null, 2),
+    );
+    const users = await User.find(query).select(
+      "_id fcmToken timezone country",
+    );
+    console.log(`✅ Found ${users.length} eligible users for notification`);
+
+    return users;
   }
 
   /**
@@ -78,7 +100,7 @@ class NotificationService {
     await UserNotificationCounter.findOneAndUpdate(
       { userId, date: today },
       { $inc: { count: 1 } },
-      { upsert: true, new: true }
+      { upsert: true, new: true },
     );
   }
 
@@ -162,8 +184,15 @@ class NotificationService {
     notification.status = "sending";
     await notification.save();
 
+    console.log(`📢 Starting notification send for ID: ${notificationId}`);
+    console.log(
+      `📋 Audience config:`,
+      JSON.stringify(notification.audience, null, 2),
+    );
+
     // Get eligible users
     const users = await this.getEligibleUsers(notification.audience, User);
+    console.log(`👥 Total users to send: ${users.length}`);
 
     let sentCount = 0;
     let deliveredCount = 0;
@@ -206,7 +235,7 @@ class NotificationService {
           user.fcmToken,
           notification.message,
           notificationId,
-          user._id
+          user._id,
         );
 
         if (result.success) {
@@ -285,7 +314,7 @@ class NotificationService {
           log.userId.fcmToken,
           notification.message,
           notificationId,
-          log.userId._id
+          log.userId._id,
         );
 
         log.retryCount += 1;
