@@ -49,6 +49,9 @@ require("./controller/pvpController")(io);
 app.get("/", (req, res) => {
   res.json({ success: true, message: "Server is up and running" });
 });
+app.get("/health", (req, res) => {
+  res.json({ success: true, message: "Health check passed" });
+});
 
 // 🔹 CONNECT MONGOOSE (separate)
 mongoose
