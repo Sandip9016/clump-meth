@@ -515,6 +515,13 @@ class PVPChallengeController {
             id: opponent.id,
             username: opponent.username,
             rating: opponent.rating,
+            // ✅ Added Player History
+            stats: {
+              wins: opponent.stats?.pvp?.[gameRoom.difficulty]?.wins || 0,
+              losses: opponent.stats?.pvp?.[gameRoom.difficulty]?.losses || 0,
+              winRate: opponent.stats?.pvp?.[gameRoom.difficulty]?.winRate || 0,
+              currentStreak: opponent.stats?.pvp?.[gameRoom.difficulty]?.currentStreak || 0,
+            },
           },
           myPlayerId: p.id,
           initialQuestionMeter: gameRoom.questionMeter,

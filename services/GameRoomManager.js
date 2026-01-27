@@ -81,6 +81,8 @@ class GameRoomManager {
 
     // Remove player mappings
     gameRoom.getPlayers().forEach((player) => {
+      // ✅ CRITICAL FIX: Ensure player state is reset
+      player.isInGame = false;
       this.playerToRoom.delete(player.id);
     });
 
