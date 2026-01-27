@@ -750,12 +750,18 @@ module.exports = function registerSocketHandlers(io, app) {
       await challengeController.handlePlayerDisconnect(player.id);
       console.log("✅ Challenge cleanup completed");
 
-      // 2. REMOVE FROM MATCHMAKING QUEUE
-      await matchmakingService.removeFromQueue(player);
-      console.log("✅ Removed from matchmaking queue");
-
-      // 3. HANDLE GAME ROOM DISCONNECTION
+      // 2. CHECK IF IN GAME ROOM
       const gameRoom = gameRoomManager.getPlayerGameRoom(player.id);
+      
+      // 3. REMOVE FROM MATCHMAKING QUEUE (Only if NOT in a game)
+      if (!gameRoom) {
+        await matchmakingService.removeFromQueue(player);
+        console.log("✅ Removed from matchmaking queue");
+      } else {
+        console.log("ℹ️ Player is in a game room, skipping queue removal to preserve state");
+      }
+
+      // 4. HANDLE GAME ROOM DISCONNECTION
 
       if (gameRoom) {
         console.log(`🎮 ${player.username} was in game room: ${gameRoom.id}`);
