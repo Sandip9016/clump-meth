@@ -726,6 +726,29 @@ class GameRoom {
     } else {
       ps.streak = 0;
     }
+    
+    // Return result for controller
+    return {
+      isCorrect,
+      score: ps.score,
+      streak: ps.streak,
+      correctAnswers: ps.correctAnswers,
+      history: this.getPlayerHistory(playerId)
+    };
+  }
+
+  // ✅ NEW: Get player's answer history for UI
+  getPlayerHistory(playerId) {
+    const history = [];
+    const currentIdx = this.playerProgress.get(playerId);
+    
+    for (let i = 0; i < currentIdx; i++) {
+        const answers = this.playerAnswers.get(`${i}`);
+        if (answers && answers.has(playerId)) {
+            history.push(answers.get(playerId).isCorrect);
+        }
+    }
+    return history.slice(-8); 
   }
 
   async endGame() {

@@ -349,15 +349,18 @@ module.exports = function registerSocketHandlers(io, app) {
         const gameRoom = gameRoomManager.getPlayerGameRoom(player.id);
         if (!gameRoom) throw new Error("Game room not found");
 
-        gameRoom.submitAnswer(player.id, data.answer, data.timeSpent);
+        const result = gameRoom.submitAnswer(player.id, data.answer, data.timeSpent);
+
+        // ✅ Log for debugging
+        console.log(`📊 History update for ${player.username}:`, result?.history);
 
         const opponent = gameRoom.getOpposingPlayer(player.id);
         if (opponent) {
-          const playerScore = gameRoom.playerScores.get(player.id);
-          io.to(opponent.socketId).emit("opponent-score-update", {
+           io.to(opponent.socketId).emit("opponent-score-update", {
             opponentId: player.id,
-            score: playerScore.score,
-            correctAnswers: playerScore.correctAnswers,
+            score: result?.score || 0,
+            correctAnswers: result?.correctAnswers || 0,
+            history: result?.history || [] 
           });
         }
 
@@ -383,6 +386,7 @@ module.exports = function registerSocketHandlers(io, app) {
           throw new Error("Can only send emoji during active game");
         }
 
+        console.log(`😄 Emoji request from ${player.username}: ${data.emoji}`);
         const result = gameRoom.sendEmojiToOpponent(player.id, data.emoji);
 
         if (!result.success) {
