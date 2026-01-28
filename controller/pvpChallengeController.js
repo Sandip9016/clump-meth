@@ -123,7 +123,17 @@ class PVPChallengeController {
 
       // Check if target is in game
       if (targetPlayer.isInGame) {
-        throw new Error(`${targetPlayer.username} is currently in a game`);
+        // ✅ DOUBLE CHECK: Verify with GameRoomManager if they are actually in a room
+        // This handles "zombie" states where player has isInGame=true but no room exists
+        const actualGameRoom = this.gameRoomManager.getPlayerGameRoom(targetPlayer.id);
+        
+        if (!actualGameRoom) {
+          console.warn(`⚠️ CORRECTING STATE: ${targetPlayer.username} had isInGame=true but no room found. Resetting.`);
+          targetPlayer.isInGame = false; 
+          // Proceed with challenge...
+        } else {
+           throw new Error(`${targetPlayer.username} is currently in a game`);
+        }
       }
 
       // Check if challenge already exists

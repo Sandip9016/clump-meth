@@ -29,8 +29,19 @@ class GameRoomManager {
           console.log(`🧹 Cleaning stale mapping for ${p.username} (${p.id})`);
           this.playerToRoom.delete(p.id);
         } else {
-          // Room still exists - this is a real duplicate
-          throw new Error(`Player already in a game: ${p.id} (${p.username})`);
+          // ✅ CHECK ROOM STATE: If it's a finished game (post-game lobby), clean it up
+          const allowedStates = ["completed", "post-game", "lobby-expired"];
+          if (allowedStates.includes(existingRoom.gameState)) {
+             console.log(`♻️ Cleaning up finished game room ${existingRoomId} (${existingRoom.gameState}) for new match.`);
+             this.removeGameRoom(existingRoomId);
+             // Verify cleanup
+             if (this.playerToRoom.has(p.id)) {
+                 this.playerToRoom.delete(p.id); // Force delete if removeGameRoom didn't get it
+             }
+          } else {
+             // Room is active - real duplicate
+             throw new Error(`Player already in a game: ${p.id} (${p.username})`);
+          }
         }
       }
     });
