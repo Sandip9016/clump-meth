@@ -69,3 +69,6 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+// the original mongo uri is :
+// MONGO_URI= mongodb+srv://developerclumpcoder_db_user:2Rkj8J0XuhrNKGOJ@maths.ayc5ult.mongodb.net/math?retryWrites=true&w=majority&appName=maths

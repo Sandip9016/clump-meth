@@ -1,6 +1,7 @@
 const Friend = require("../models/Friend");
 const Player = require("../models/Player");
 const admin = require("../config/firebase");
+const { memoryStorage } = require("multer");
 
 exports.addFriend = async (req, res) => {
   try {
@@ -68,7 +69,6 @@ exports.addFriend = async (req, res) => {
     // Push notification
     const receiver = await Player.findById(recipient);
     const sender = await Player.findById(requester);
-    
 
     if (receiver?.fcmToken) {
       await admin.messaging().send({
@@ -97,7 +97,6 @@ exports.addFriend = async (req, res) => {
     });
   }
 };
-
 
 exports.acceptFrndRequest = async (req, res) => {
   try {
@@ -129,7 +128,7 @@ exports.acceptFrndRequest = async (req, res) => {
         ],
       },
       { status: "accepted" },
-      { new: true }
+      { new: true },
     );
 
     const receiver = await Player.findById(recipient);
@@ -202,7 +201,7 @@ exports.rejectFrndRequest = async (req, res) => {
         ],
       },
       { status: "rejected" },
-      { new: true }
+      { new: true },
     );
 
     const receiver = await Player.findById(recipient);
@@ -261,7 +260,7 @@ exports.searchUser = async (req, res) => {
 
     // 3️⃣ Fetch users
     const users = await Player.find(query).select(
-      "username email firstName lastName gender country profileImage pr"
+      "username email firstName lastName gender country profileImage pr",
     );
 
     // 4️⃣ Fetch friendships
@@ -312,7 +311,7 @@ exports.searchUser = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Server error",
-});
+    });
   }
 };
 
@@ -324,7 +323,7 @@ exports.userList = async (req, res) => {
     const query = { _id: { $ne: _id } };
 
     const users = await Player.find(query).select(
-      "username email firstName lastName  gender country profileImage pr"
+      "username email firstName lastName  gender country profileImage pr",
     );
 
     // Get friendships
@@ -357,8 +356,8 @@ exports.userList = async (req, res) => {
         _id: u._id,
         username: u.username,
         email: u.email,
-        firstName:u.firstName,
-        lastName:u.lastName,
+        firstName: u.firstName,
+        lastName: u.lastName,
         gender: u.gender,
         country: u.country,
         profileImage: u.profileImage,
@@ -390,7 +389,8 @@ exports.friendRequestList = async (req, res) => {
     })
       .populate({
         path: "requester",
-        select: "username email firstName lastName  gender country profileImage",
+        select:
+          "username email firstName lastName  gender country profileImage",
       })
       .sort({ createdAt: -1 });
 
@@ -407,7 +407,6 @@ exports.friendRequestList = async (req, res) => {
     });
   }
 };
-
 
 exports.deleteFriendship = async (req, res) => {
   const { _id } = req.user; // logged-in user
@@ -453,7 +452,6 @@ exports.deleteFriendship = async (req, res) => {
 
 exports.deleteAllFriendship = async (req, res) => {
   try {
-   
     await Friend.deleteMany({});
 
     return res.status(200).json({
@@ -468,7 +466,6 @@ exports.deleteAllFriendship = async (req, res) => {
     });
   }
 };
-
 
 exports.myFriendList = async (req, res) => {
   const { _id } = req.user; // logged-in user
@@ -498,7 +495,7 @@ exports.myFriendList = async (req, res) => {
           ? f.recipient
           : f.requester;
 
-      // Convert PR object → array 
+      // Convert PR object → array
       const prArray = Object.entries(friend.pr || {}).map(([mode, levels]) => ({
         mode,
         ...levels,
@@ -531,7 +528,6 @@ exports.myFriendList = async (req, res) => {
     });
   }
 };
-
 
 exports.deleteFriendshipByUser = async (req, res) => {
   const { _id } = req.user; // logged-in user
@@ -577,5 +573,146 @@ exports.deleteFriendshipByUser = async (req, res) => {
       success: false,
       message: "Server error",
     });
+  }
+};
+
+///// from here i made new api function for top 10 list of user based on pr in friend.js file and add route for that in friend.js file
+exports.top10CountryList = async (req, res) => {
+  try {
+    const userId = req.user.id; // Get logged-in user from auth middleware
+
+    // 1️⃣ Find logged-in player
+    const player = await Player.findById(userId);
+    if (!player) {
+      return res.status(404).json({
+        success: false,
+        message: "Player not found",
+      });
+    }
+
+    // 2️⃣ Determine player's level based on highest PvP rating
+    const { easy, medium, hard } = player.pr.pvp;
+    let level;
+
+    if (easy >= medium && easy >= hard) {
+      level = "easy";
+    } else if (medium >= easy && medium >= hard) {
+      level = "medium";
+    } else {
+      level = "hard";
+    }
+
+    const country = player.country;
+
+    // 3️⃣ Fetch top 10 players in the same country & level
+    const players = await Player.find({
+      country,
+      "accountStatus.state": "active",
+    })
+      .sort({ [`pr.pvp.${level}`]: -1 })
+      .limit(10)
+      .select("username profileImage pr");
+
+    res.status(200).json({
+      success: true,
+      msg: `Top 10 players in your country (${country}) for your level: ${level}`,
+      playerLevel: level,
+      count: players.length,
+      data: players,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+///// from here i made new api function for top 10 list of user based on pr in friend.js file and add route for that in friend.js file
+exports.top10GlobalList = async (req, res) => {
+  try {
+    const userId = req.user.id; // Get logged-in user from auth middleware
+
+    // 1️⃣ Find the logged-in player
+    const player = await Player.findById(userId);
+    if (!player) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Player not found" });
+    }
+
+    // 2️⃣ Determine player's level based on highest PvP rating
+    const { easy, medium, hard } = player.pr.pvp;
+    let level;
+    if (easy >= medium && easy >= hard) level = "easy";
+    else if (medium >= easy && medium >= hard) level = "medium";
+    else level = "hard";
+
+    // 3️⃣ Fetch top 10 global players at this level
+    const players = await Player.find({ "accountStatus.state": "active" })
+      .sort({ [`pr.pvp.${level}`]: -1 })
+      .limit(10)
+      .select("username country profileImage pr");
+
+    res.status(200).json({
+      success: true,
+      msg: `Top 10 players globally for your level: ${level}`,
+      playerLevel: level,
+      count: players.length,
+      data: players,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+module.exports.top100FriendList = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // 1️⃣ Get logged-in player
+    const player = await Player.findById(userId);
+    if (!player) {
+      return res.status(404).json({
+        success: false,
+        message: "Player not found",
+      });
+    }
+
+    // 2️⃣ Determine player's strongest level
+    const { easy, medium, hard } = player.pr.pvp;
+
+    let level;
+    if (easy >= medium && easy >= hard) level = "easy";
+    else if (medium >= easy && medium >= hard) level = "medium";
+    else level = "hard";
+
+    // 3️⃣ Get all accepted friendships
+    const friendships = await Friend.find({
+      status: "accepted",
+      $or: [{ requester: userId }, { recipient: userId }],
+    }).select("requester recipient");
+
+    // 4️⃣ Extract friend IDs
+    const friendIds = friendships.map((f) =>
+      f.requester.toString() === userId ? f.recipient : f.requester,
+    );
+
+    // 5️⃣ Get top 100 friends based on that level
+    const topFriends = await Player.find({
+      _id: { $in: friendIds },
+      "accountStatus.state": "active",
+    })
+      .sort({ [`pr.pvp.${level}`]: -1 })
+      .limit(100)
+      .select("username country profileImage pr")
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      msg: `Top 100 friends based on your strongest level: ${level}`,
+      playerLevel: level,
+      count: topFriends.length,
+      data: topFriends,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };
