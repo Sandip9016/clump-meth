@@ -289,9 +289,12 @@ exports.listRequests = async (req, res) => {
       type === "outgoing"
         ? { requester: req.user._id }
         : { recipient: req.user._id };
-     
-    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;    
-    const requests = await MatchRequest.find({...filter, createdAt:{ $gte: oneDayAgo }})
+
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    const requests = await MatchRequest.find({
+      ...filter,
+      createdAt: { $gte: oneDayAgo },
+    })
       .sort({ createdAt: -1 })
       .populate("requester", "username")
       .populate("recipient", "username")
@@ -313,6 +316,8 @@ exports.recordResult = async (req, res) => {
       scorePlayer1,
       scorePlayer2,
       durationSeconds,
+      timer,
+      difficulty,
     } = req.body;
 
     if (
@@ -347,6 +352,8 @@ exports.recordResult = async (req, res) => {
       winner,
       result,
       gameDuration: durationSeconds || 0,
+      timer,
+      difficulty,
     });
 
     return res.status(201).json({
@@ -363,7 +370,7 @@ exports.recordResult = async (req, res) => {
 /* ---------------------- Get Game By ID ---------------------- */
 exports.getGameResult = async (req, res) => {
   try {
-    const { id} = req.params;
+    const { id } = req.params;
 
     const game = await PVPGame.findById(id)
       .populate("player1", "username")
