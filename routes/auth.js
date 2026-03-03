@@ -1,45 +1,45 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const authController = require('../controller/authController');
-const auth = require('../middleware/auth');
+const authController = require("../controller/authController");
+const auth = require("../middleware/auth");
 const profileController = require("../controller/profileController");
 const { uploadToMemory, handleMulterError } = require("../config/multerConfig");
 const { uploadToS3 } = require("../config/multerConfig");
+const translate = require("../controller/translationController");
 
 //login
-router.post('/login', authController.login)
+router.post("/login", authController.login);
 
-// Registration 
+// Registration
 router.post("/signup", authController.signup); // Sends OTP
 router.post("/verify-signup-otp", authController.verifySignupOTP); // Verifies OTP and completes registration
 router.post("/resend-signup-otp", authController.resendSignupOTP); // Resend OTP
 
 //Forgetpassword
-router.post('/sendForgotPassOtp', authController.sendForgotPasswordOtp);
+router.post("/sendForgotPassOtp", authController.sendForgotPasswordOtp);
 router.post("/verfy-forget-otp", authController.verifyForgotPasswordOtp);
 router.post("/changePass", authController.changePassword);
-router.post('/resend-forget-otp',authController.resendForgotPasswordOtp)
+router.post("/resend-forget-otp", authController.resendForgotPasswordOtp);
 
+//app language translation
+router.post("/translate", translate.translate);
 
 //
 router.delete("/admin/delete-user/:userId", authController.deleteUserByAdmin);
-
 
 //Update profile using S3 Bucket
 router.put(
   "/profile",
   auth,
   uploadToMemory.single("profileImage"),
-  profileController.updateProfile
+  profileController.updateProfile,
 );
 // router.delete("/profile/image", auth, profileController.deleteProfileImage);
 
 //Get information
-router.get('/getUser', auth ,authController.getUser);
-router.get('/getUserById', auth ,authController.getUserById);
-router.get('/allUser', authController.allUserList);
+router.get("/getUser", auth, authController.getUser);
+router.get("/getUserById", auth, authController.getUserById);
+router.get("/allUser", authController.allUserList);
 
-
-router.patch('/save-fcmToken', auth, authController.saveFcmToken );
+router.patch("/save-fcmToken", auth, authController.saveFcmToken);
 module.exports = router;
-

@@ -611,7 +611,7 @@ exports.top10CountryList = async (req, res) => {
     })
       .sort({ [`pr.pvp.${level}`]: -1 })
       .limit(10)
-      .select("username profileImage pr");
+      .select("username profileImage country pr");
 
     res.status(200).json({
       success: true,
