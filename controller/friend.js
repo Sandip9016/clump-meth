@@ -2,6 +2,7 @@ const Friend = require("../models/Friend");
 const Player = require("../models/Player");
 const admin = require("../config/firebase");
 const { memoryStorage } = require("multer");
+const axios = require("axios");
 
 exports.addFriend = async (req, res) => {
   try {
@@ -468,10 +469,11 @@ exports.deleteAllFriendship = async (req, res) => {
 };
 
 exports.myFriendList = async (req, res) => {
-  const { _id } = req.user; // logged-in user
+  const { _id } = req.user;
+  const targetLanguage = req.query.targetLanguage || "English";
 
   try {
-    // 1️⃣ Find accepted friendships
+    // 1️⃣ Fetch all accepted friendships
     const friendships = await Friend.find({
       status: "accepted",
       $or: [{ requester: _id }, { recipient: _id }],
@@ -488,14 +490,13 @@ exports.myFriendList = async (req, res) => {
       })
       .sort({ updatedAt: -1 });
 
-    // 2️⃣ Extract ONLY friend data (not logged-in user)
+    // 2️⃣ Map friends data
     const friends = friendships.map((f) => {
       const friend =
         f.requester._id.toString() === _id.toString()
           ? f.recipient
           : f.requester;
 
-      // Convert PR object → array
       const prArray = Object.entries(friend.pr || {}).map(([mode, levels]) => ({
         mode,
         ...levels,
@@ -515,19 +516,107 @@ exports.myFriendList = async (req, res) => {
       };
     });
 
+    // 3️⃣ Skip translation if English
+    if (targetLanguage.toLowerCase() === "english") {
+      return res.status(200).json({
+        success: true,
+        total: friends.length,
+        friends,
+      });
+    }
+
+    // 4️⃣ Prepare page content for translation
+    const pageContent = {
+      usernames: friends.map((f) => f.username),
+      countries: friends.map((f) => f.country),
+    };
+
+    // 5️⃣ Call helper function for translation
+    const translated = await translatePageContent(pageContent, targetLanguage);
+
+    // 6️⃣ Merge translated values
+    const translatedFriends = friends.map((f, i) => ({
+      ...f,
+      username: translated.usernames?.[i] || f.username,
+      country: translated.countries?.[i] || f.country,
+    }));
+
     return res.status(200).json({
       success: true,
-      total: friends.length,
-      friends,
+      total: translatedFriends.length,
+      friends: translatedFriends,
     });
   } catch (error) {
     console.error("Error fetching friend list:", error);
+
     return res.status(500).json({
       success: false,
       message: "Server error",
     });
   }
 };
+
+// exports.myFriendList = async (req, res) => {
+//   const { _id } = req.user; // logged-in user
+
+//   try {
+//     // 1️⃣ Find accepted friendships
+//     const friendships = await Friend.find({
+//       status: "accepted",
+//       $or: [{ requester: _id }, { recipient: _id }],
+//     })
+//       .populate({
+//         path: "requester",
+//         select:
+//           "username email firstName lastName gender country profileImage pr",
+//       })
+//       .populate({
+//         path: "recipient",
+//         select:
+//           "username email firstName lastName gender country profileImage pr",
+//       })
+//       .sort({ updatedAt: -1 });
+
+//     // 2️⃣ Extract ONLY friend data (not logged-in user)
+//     const friends = friendships.map((f) => {
+//       const friend =
+//         f.requester._id.toString() === _id.toString()
+//           ? f.recipient
+//           : f.requester;
+
+//       // Convert PR object → array
+//       const prArray = Object.entries(friend.pr || {}).map(([mode, levels]) => ({
+//         mode,
+//         ...levels,
+//       }));
+
+//       return {
+//         _id: friend._id,
+//         username: friend.username,
+//         email: friend.email,
+//         firstName: friend.firstName,
+//         lastName: friend.lastName,
+//         gender: friend.gender,
+//         country: friend.country,
+//         profileImage: friend.profileImage,
+//         pr: prArray,
+//         friendshipStatus: "accepted",
+//       };
+//     });
+
+//     return res.status(200).json({
+//       success: true,
+//       total: friends.length,
+//       friends,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching friend list:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Server error",
+//     });
+//   }
+// };
 
 exports.deleteFriendshipByUser = async (req, res) => {
   const { _id } = req.user; // logged-in user
@@ -576,42 +665,140 @@ exports.deleteFriendshipByUser = async (req, res) => {
   }
 };
 
-///// from here i made new api function for top 10 list of user based on pr in friend.js file and add route for that in friend.js file
+// Helper function to translate content
+async function translatePageContent(pageContent, targetLanguage) {
+  try {
+    const response = await axios.post(
+      "http://localhost:3000/api/auth/translate",
+      {
+        pageContent,
+        targetLanguage,
+      },
+    );
+    return response.data.translatedContent;
+  } catch (err) {
+    console.error("Translation API error:", err);
+    return pageContent; // fallback: return original if translation fails
+  }
+}
+
+// ---------------- Top 100 Friends ----------------
+exports.top100FriendList = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const targetLanguage = req.query.targetLanguage || "English";
+
+    // 1️⃣ Get logged-in player
+    const player = await Player.findById(userId);
+    if (!player)
+      return res
+        .status(404)
+        .json({ success: false, message: "Player not found" });
+
+    // 2️⃣ Determine strongest level
+    const { easy, medium, hard } = player.pr.pvp;
+    let level =
+      easy >= medium && easy >= hard
+        ? "easy"
+        : medium >= easy && medium >= hard
+          ? "medium"
+          : "hard";
+
+    // 3️⃣ Get accepted friends
+    const friendships = await Friend.find({
+      status: "accepted",
+      $or: [{ requester: userId }, { recipient: userId }],
+    }).select("requester recipient");
+
+    const friendIds = friendships.map((f) =>
+      f.requester.toString() === userId ? f.recipient : f.requester,
+    );
+
+    // 4️⃣ Get top 100 friends based on level
+    let topFriends = await Player.find({
+      _id: { $in: friendIds },
+      "accountStatus.state": "active",
+    })
+      .sort({ [`pr.pvp.${level}`]: -1 })
+      .limit(100)
+      .select("username country profileImage pr")
+      .lean();
+
+    // 5️⃣ Translate if not English
+    if (targetLanguage.toLowerCase() !== "english") {
+      const pageContent = {
+        usernames: topFriends.map((f) => f.username),
+        countries: topFriends.map((f) => f.country),
+      };
+      const translated = await translatePageContent(
+        pageContent,
+        targetLanguage,
+      );
+      topFriends = topFriends.map((f, i) => ({
+        ...f,
+        username: translated.usernames?.[i] || f.username,
+        country: translated.countries?.[i] || f.country,
+      }));
+    }
+
+    res.status(200).json({
+      success: true,
+      msg: `Top 100 friends based on your strongest level: ${level}`,
+      playerLevel: level,
+      count: topFriends.length,
+      data: topFriends,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ---------------- Top 10 Country ----------------
 exports.top10CountryList = async (req, res) => {
   try {
-    const userId = req.user.id; // Get logged-in user from auth middleware
+    const userId = req.user.id;
+    const targetLanguage = req.query.targetLanguage || "English";
 
-    // 1️⃣ Find logged-in player
     const player = await Player.findById(userId);
-    if (!player) {
-      return res.status(404).json({
-        success: false,
-        message: "Player not found",
-      });
-    }
+    if (!player)
+      return res
+        .status(404)
+        .json({ success: false, message: "Player not found" });
 
-    // 2️⃣ Determine player's level based on highest PvP rating
     const { easy, medium, hard } = player.pr.pvp;
-    let level;
-
-    if (easy >= medium && easy >= hard) {
-      level = "easy";
-    } else if (medium >= easy && medium >= hard) {
-      level = "medium";
-    } else {
-      level = "hard";
-    }
+    let level =
+      easy >= medium && easy >= hard
+        ? "easy"
+        : medium >= easy && medium >= hard
+          ? "medium"
+          : "hard";
 
     const country = player.country;
 
-    // 3️⃣ Fetch top 10 players in the same country & level
-    const players = await Player.find({
+    let players = await Player.find({
       country,
       "accountStatus.state": "active",
     })
       .sort({ [`pr.pvp.${level}`]: -1 })
       .limit(10)
-      .select("username profileImage country pr");
+      .select("username profileImage country pr")
+      .lean();
+
+    if (targetLanguage.toLowerCase() !== "english") {
+      const pageContent = {
+        usernames: players.map((p) => p.username),
+        countries: players.map((p) => p.country),
+      };
+      const translated = await translatePageContent(
+        pageContent,
+        targetLanguage,
+      );
+      players = players.map((p, i) => ({
+        ...p,
+        username: translated.usernames?.[i] || p.username,
+        country: translated.countries?.[i] || p.country,
+      }));
+    }
 
     res.status(200).json({
       success: true,
@@ -625,31 +812,47 @@ exports.top10CountryList = async (req, res) => {
   }
 };
 
-///// from here i made new api function for top 10 list of user based on pr in friend.js file and add route for that in friend.js file
+// ---------------- Top 10 Global ----------------
 exports.top10GlobalList = async (req, res) => {
   try {
-    const userId = req.user.id; // Get logged-in user from auth middleware
+    const userId = req.user.id;
+    const targetLanguage = req.query.targetLanguage || "English";
 
-    // 1️⃣ Find the logged-in player
     const player = await Player.findById(userId);
-    if (!player) {
+    if (!player)
       return res
         .status(404)
         .json({ success: false, message: "Player not found" });
-    }
 
-    // 2️⃣ Determine player's level based on highest PvP rating
     const { easy, medium, hard } = player.pr.pvp;
-    let level;
-    if (easy >= medium && easy >= hard) level = "easy";
-    else if (medium >= easy && medium >= hard) level = "medium";
-    else level = "hard";
+    let level =
+      easy >= medium && easy >= hard
+        ? "easy"
+        : medium >= easy && medium >= hard
+          ? "medium"
+          : "hard";
 
-    // 3️⃣ Fetch top 10 global players at this level
-    const players = await Player.find({ "accountStatus.state": "active" })
+    let players = await Player.find({ "accountStatus.state": "active" })
       .sort({ [`pr.pvp.${level}`]: -1 })
       .limit(10)
-      .select("username country profileImage pr");
+      .select("username country profileImage pr")
+      .lean();
+
+    if (targetLanguage.toLowerCase() !== "english") {
+      const pageContent = {
+        usernames: players.map((p) => p.username),
+        countries: players.map((p) => p.country),
+      };
+      const translated = await translatePageContent(
+        pageContent,
+        targetLanguage,
+      );
+      players = players.map((p, i) => ({
+        ...p,
+        username: translated.usernames?.[i] || p.username,
+        country: translated.countries?.[i] || p.country,
+      }));
+    }
 
     res.status(200).json({
       success: true,
@@ -657,60 +860,6 @@ exports.top10GlobalList = async (req, res) => {
       playerLevel: level,
       count: players.length,
       data: players,
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-module.exports.top100FriendList = async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    // 1️⃣ Get logged-in player
-    const player = await Player.findById(userId);
-    if (!player) {
-      return res.status(404).json({
-        success: false,
-        message: "Player not found",
-      });
-    }
-
-    // 2️⃣ Determine player's strongest level
-    const { easy, medium, hard } = player.pr.pvp;
-
-    let level;
-    if (easy >= medium && easy >= hard) level = "easy";
-    else if (medium >= easy && medium >= hard) level = "medium";
-    else level = "hard";
-
-    // 3️⃣ Get all accepted friendships
-    const friendships = await Friend.find({
-      status: "accepted",
-      $or: [{ requester: userId }, { recipient: userId }],
-    }).select("requester recipient");
-
-    // 4️⃣ Extract friend IDs
-    const friendIds = friendships.map((f) =>
-      f.requester.toString() === userId ? f.recipient : f.requester,
-    );
-
-    // 5️⃣ Get top 100 friends based on that level
-    const topFriends = await Player.find({
-      _id: { $in: friendIds },
-      "accountStatus.state": "active",
-    })
-      .sort({ [`pr.pvp.${level}`]: -1 })
-      .limit(100)
-      .select("username country profileImage pr")
-      .lean();
-
-    res.status(200).json({
-      success: true,
-      msg: `Top 100 friends based on your strongest level: ${level}`,
-      playerLevel: level,
-      count: topFriends.length,
-      data: topFriends,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
