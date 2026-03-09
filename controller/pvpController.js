@@ -136,9 +136,13 @@ module.exports = function registerSocketHandlers(io, app) {
                 // ✅ Added Player History
                 stats: {
                   wins: opponent.stats?.pvp?.[gameRoom.difficulty]?.wins || 0,
-                  losses: opponent.stats?.pvp?.[gameRoom.difficulty]?.losses || 0,
-                  winRate: opponent.stats?.pvp?.[gameRoom.difficulty]?.winRate || 0,
-                  currentStreak: opponent.stats?.pvp?.[gameRoom.difficulty]?.currentStreak || 0,
+                  losses:
+                    opponent.stats?.pvp?.[gameRoom.difficulty]?.losses || 0,
+                  winRate:
+                    opponent.stats?.pvp?.[gameRoom.difficulty]?.winRate || 0,
+                  currentStreak:
+                    opponent.stats?.pvp?.[gameRoom.difficulty]?.currentStreak ||
+                    0,
                 },
               },
               myPlayerId: p.id,
@@ -179,16 +183,17 @@ module.exports = function registerSocketHandlers(io, app) {
         // Extract target player identifier
         const targetIdentifier = {
           username: data.username,
-          userId: data.userId,
+          userId: data.userId || data.recipientId,
         };
 
         // Extract custom settings (if provided)
         const customSettings = {
-          diff: data.diff,
+          diff: data.diff || data.difficulty,
           timer: data.timer,
           symbol: data.symbol,
         };
-
+        console.log("🎯 Target Identifier:", targetIdentifier);
+        console.log("⚙️ Custom Settings:", customSettings);
         const result = await challengeController.sendChallenge(
           socket.id,
           targetIdentifier,
@@ -349,18 +354,25 @@ module.exports = function registerSocketHandlers(io, app) {
         const gameRoom = gameRoomManager.getPlayerGameRoom(player.id);
         if (!gameRoom) throw new Error("Game room not found");
 
-        const result = gameRoom.submitAnswer(player.id, data.answer, data.timeSpent);
+        const result = gameRoom.submitAnswer(
+          player.id,
+          data.answer,
+          data.timeSpent,
+        );
 
         // ✅ Log for debugging
-        console.log(`📊 History update for ${player.username}:`, result?.history);
+        console.log(
+          `📊 History update for ${player.username}:`,
+          result?.history,
+        );
 
         const opponent = gameRoom.getOpposingPlayer(player.id);
         if (opponent) {
-           io.to(opponent.socketId).emit("opponent-score-update", {
+          io.to(opponent.socketId).emit("opponent-score-update", {
             opponentId: player.id,
             score: result?.score || 0,
             correctAnswers: result?.correctAnswers || 0,
-            history: result?.history || [] 
+            history: result?.history || [],
           });
         }
 
@@ -763,13 +775,15 @@ module.exports = function registerSocketHandlers(io, app) {
 
       // 2. CHECK IF IN GAME ROOM
       const gameRoom = gameRoomManager.getPlayerGameRoom(player.id);
-      
+
       // 3. REMOVE FROM MATCHMAKING QUEUE (Only if NOT in a game)
       if (!gameRoom) {
         await matchmakingService.removeFromQueue(player);
         console.log("✅ Removed from matchmaking queue");
       } else {
-        console.log("ℹ️ Player is in a game room, skipping queue removal to preserve state");
+        console.log(
+          "ℹ️ Player is in a game room, skipping queue removal to preserve state",
+        );
       }
 
       // 4. HANDLE GAME ROOM DISCONNECTION
