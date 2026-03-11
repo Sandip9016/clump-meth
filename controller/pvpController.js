@@ -17,7 +17,6 @@ module.exports = function registerSocketHandlers(io, app) {
     gameRoomManager,
   );
 
-  // ✅ Initialize Challenge Controller
   const challengeController = new PVPChallengeController(
     io,
     playerManager,
@@ -25,16 +24,19 @@ module.exports = function registerSocketHandlers(io, app) {
     questionService,
   );
 
-  // ✅ Store in app.locals for route access
   if (app && app.locals) {
     app.locals.playerManager = playerManager;
     app.locals.challengeController = challengeController;
   }
 
+  // ✅ Secondary index: userId → socketId
+  // Survives socket reconnects so we can update the player's socketId
+  // instead of losing their registration entirely
+  const userIdToSocketId = new Map();
+
   io.on("connection", async (socket) => {
     console.log(`✅ Player connected: ${socket.id}`);
 
-    // Test Redis connection
     try {
       const redis = await getRedisClient();
       await redis.ping();
@@ -44,13 +46,25 @@ module.exports = function registerSocketHandlers(io, app) {
     }
 
     /* ========================================
-   REGISTER PLAYER (ONLINE ONLY)
-   No matchmaking, no challenge
-======================================== */
+       REGISTER PLAYER
+       ✅ FIX: If player re-registers with a new socket.id
+       (after transport error reconnect), update their socketId
+       in playerManager instead of creating a duplicate entry.
+    ======================================== */
     socket.on("register-player", (playerData) => {
       try {
         if (!playerData.userId) {
           throw new Error("userId is required");
+        }
+
+        // Check if this user already has a session under a different socket
+        const oldSocketId = userIdToSocketId.get(playerData.userId);
+        if (oldSocketId && oldSocketId !== socket.id) {
+          console.log(
+            `🔄 ${playerData.username} reconnected: ${oldSocketId} → ${socket.id}`,
+          );
+          // Remove old socket entry so playerManager stays clean
+          playerManager.removePlayer(oldSocketId);
         }
 
         const player = playerManager.addPlayer(socket.id, {
@@ -62,6 +76,9 @@ module.exports = function registerSocketHandlers(io, app) {
           timer: playerData.timer,
           symbol: playerData.symbol,
         });
+
+        // Update secondary index
+        userIdToSocketId.set(playerData.userId, socket.id);
 
         socket.emit("player-registered", {
           success: true,
@@ -76,25 +93,34 @@ module.exports = function registerSocketHandlers(io, app) {
           onlineCount: playerManager.getOnlineCount(),
         });
 
-        console.log(`🟢 Player ONLINE: ${player.username} (${player.id})`);
+        console.log(
+          `🟢 Player ONLINE: ${player.username} (${player.id}) | Socket: ${socket.id}`,
+        );
       } catch (error) {
         console.error("❌ register-player error:", error);
+        // ✅ Never disconnect on error — just emit
         socket.emit("error", { message: error.message });
       }
     });
 
     /* ========================================
        JOIN LOBBY & START MATCHMAKING
+       ✅ FIX: Never call socket.disconnect() here.
+       Only emit error and return.
     ======================================== */
     socket.on("join-lobby", async (lobbyData) => {
       try {
         const player = playerManager.getPlayer(socket.id);
 
         if (!player) {
-          throw new Error("Player not registered");
+          console.warn(
+            `⚠️ join-lobby: No player for socket ${socket.id} — sending error, NOT disconnecting`,
+          );
+          // ✅ CRITICAL: only emit error, never disconnect
+          socket.emit("error", { message: "Player not registered" });
+          return;
         }
 
-        // 🔥 UPDATE PLAYER GAME DYNAMICS HERE
         playerManager.updatePlayerGamePreferences(socket.id, {
           diff: lobbyData.diff,
           timer: lobbyData.timer,
@@ -133,7 +159,6 @@ module.exports = function registerSocketHandlers(io, app) {
                 id: opponent.id,
                 username: opponent.username,
                 rating: opponent.rating,
-                // ✅ Added Player History
                 stats: {
                   wins: opponent.stats?.pvp?.[gameRoom.difficulty]?.wins || 0,
                   losses:
@@ -164,36 +189,29 @@ module.exports = function registerSocketHandlers(io, app) {
         });
       } catch (error) {
         console.error("❌ join-lobby error:", error);
+        // ✅ Never disconnect — only emit error
         socket.emit("error", { message: error.message });
       }
     });
 
     /* ========================================
-       CHALLENGE SYSTEM SOCKET HANDLERS
+       CHALLENGE SYSTEM
     ======================================== */
-
-    /**
-     * SEND CHALLENGE
-     * Client sends: { username, userId, diff, timer, symbol }
-     */
     socket.on("send-challenge", async (data) => {
       try {
         console.log(`📤 Challenge request from ${socket.id}:`, data);
 
-        // Extract target player identifier
         const targetIdentifier = {
           username: data.username,
           userId: data.userId || data.recipientId,
         };
 
-        // Extract custom settings (if provided)
         const customSettings = {
           diff: data.diff || data.difficulty,
           timer: data.timer,
           symbol: data.symbol,
         };
-        console.log("🎯 Target Identifier:", targetIdentifier);
-        console.log("⚙️ Custom Settings:", customSettings);
+
         const result = await challengeController.sendChallenge(
           socket.id,
           targetIdentifier,
@@ -210,19 +228,12 @@ module.exports = function registerSocketHandlers(io, app) {
       }
     });
 
-    /**
-     * ACCEPT CHALLENGE
-     * Client sends: { challengeId }
-     */
     socket.on("accept-challenge", async (data) => {
       try {
-        console.log(`✅ Accept challenge from ${socket.id}:`, data);
-
         const result = await challengeController.acceptChallenge(
           socket.id,
           data.challengeId,
         );
-
         socket.emit("challenge-accepted-success", result);
       } catch (error) {
         console.error("❌ accept-challenge error:", error);
@@ -234,19 +245,12 @@ module.exports = function registerSocketHandlers(io, app) {
       }
     });
 
-    /**
-     * DECLINE CHALLENGE
-     * Client sends: { challengeId }
-     */
     socket.on("decline-challenge", async (data) => {
       try {
-        console.log(`❌ Decline challenge from ${socket.id}:`, data);
-
         const result = await challengeController.declineChallenge(
           socket.id,
           data.challengeId,
         );
-
         socket.emit("challenge-declined-success", result);
       } catch (error) {
         console.error("❌ decline-challenge error:", error);
@@ -258,19 +262,12 @@ module.exports = function registerSocketHandlers(io, app) {
       }
     });
 
-    /**
-     * CANCEL CHALLENGE
-     * Client sends: { challengeId }
-     */
     socket.on("cancel-challenge", async (data) => {
       try {
-        console.log(`🚫 Cancel challenge from ${socket.id}:`, data);
-
         const result = await challengeController.cancelChallenge(
           socket.id,
           data.challengeId,
         );
-
         socket.emit("challenge-cancelled-success", result);
       } catch (error) {
         console.error("❌ cancel-challenge error:", error);
@@ -282,9 +279,6 @@ module.exports = function registerSocketHandlers(io, app) {
       }
     });
 
-    /**
-     * GET MY CHALLENGES
-     */
     socket.on("get-my-challenges", () => {
       try {
         const player = playerManager.getPlayer(socket.id);
@@ -297,7 +291,6 @@ module.exports = function registerSocketHandlers(io, app) {
         }
 
         const challenges = challengeController.getPlayerChallenges(player.id);
-
         socket.emit("my-challenges", {
           challenges,
           totalSent: challenges.filter((c) => c.type === "sent").length,
@@ -312,9 +305,6 @@ module.exports = function registerSocketHandlers(io, app) {
       }
     });
 
-    /**
-     * GET CHALLENGE STATISTICS (ADMIN)
-     */
     socket.on("get-challenge-stats", () => {
       try {
         const stats = challengeController.getStatistics();
@@ -333,10 +323,7 @@ module.exports = function registerSocketHandlers(io, app) {
         if (player) {
           await matchmakingService.removeFromQueue(player);
           console.log(`❌ ${player.username} cancelled search`);
-
-          socket.emit("search-cancelled", {
-            message: "Matchmaking cancelled",
-          });
+          socket.emit("search-cancelled", { message: "Matchmaking cancelled" });
         }
       } catch (error) {
         console.error("❌ cancel_search error:", error);
@@ -360,7 +347,6 @@ module.exports = function registerSocketHandlers(io, app) {
           data.timeSpent,
         );
 
-        // ✅ Log for debugging
         console.log(
           `📊 History update for ${player.username}:`,
           result?.history,
@@ -384,7 +370,7 @@ module.exports = function registerSocketHandlers(io, app) {
     });
 
     /* ========================================
-       SEND EMOJI DURING MATCH
+       SEND EMOJI
     ======================================== */
     socket.on("send-emoji", async (data) => {
       try {
@@ -398,7 +384,6 @@ module.exports = function registerSocketHandlers(io, app) {
           throw new Error("Can only send emoji during active game");
         }
 
-        console.log(`😄 Emoji request from ${player.username}: ${data.emoji}`);
         const result = gameRoom.sendEmojiToOpponent(player.id, data.emoji);
 
         if (!result.success) {
@@ -415,7 +400,7 @@ module.exports = function registerSocketHandlers(io, app) {
     });
 
     /* ========================================
-       RECONNECT TO GAME (GRACE PERIOD)
+       RECONNECT TO GAME
     ======================================== */
     socket.on("reconnect-to-game", async (data) => {
       try {
@@ -425,14 +410,12 @@ module.exports = function registerSocketHandlers(io, app) {
         const gameRoom = gameRoomManager.getPlayerGameRoom(player.id);
         if (!gameRoom) throw new Error("Game room not found");
 
-        // Try to reconnect during grace period
         const reconnected = await gameRoom.handlePlayerReconnect(player.id);
 
         if (reconnected) {
-          player.socketId = socket.id; // Update socket ID
+          player.socketId = socket.id;
           player.isInGame = true;
 
-          // Send game state to reconnected player
           socket.emit("game-reconnected", {
             message: "Successfully reconnected to game!",
             gameState: gameRoom.getGameState(),
@@ -483,25 +466,18 @@ module.exports = function registerSocketHandlers(io, app) {
     });
 
     /* ========================================
-       GAME ENDED (NORMAL OR TIME EXPIRED)
+       GAME ENDED
     ======================================== */
     socket.on("game-ended", async () => {
       try {
         const player = playerManager.getPlayer(socket.id);
-        if (!player) {
-          console.log("❌ Player not found for game-ended");
-          return;
-        }
+        if (!player) return;
 
         const gameRoom = gameRoomManager.getPlayerGameRoom(player.id);
-        if (!gameRoom) {
-          console.log("❌ Game room not found for game-ended");
-          return;
-        }
+        if (!gameRoom) return;
 
         console.log(`🏁 Game ended for room: ${gameRoom.id}`);
 
-        // End the game if not already ended
         if (
           gameRoom.gameState !== "completed" &&
           gameRoom.gameState !== "post-game"
@@ -509,11 +485,9 @@ module.exports = function registerSocketHandlers(io, app) {
           await gameRoom.endGame();
         }
 
-        // ✅ TRANSITION TO POST-GAME LOBBY (don't remove room yet)
         if (gameRoom.gameState === "completed") {
           const postGameStatus = await gameRoom.transitionToPostGameLobby();
 
-          // Notify both players about post-game state
           gameRoom.getPlayers().forEach((p) => {
             io.to(p.socketId).emit("post-game-started", {
               message: postGameStatus.message,
@@ -522,10 +496,6 @@ module.exports = function registerSocketHandlers(io, app) {
               rematchStatus: gameRoom.getRematchStatus(),
             });
           });
-
-          console.log(
-            `✅ Game transitioned to post-game lobby for ${player.username}`,
-          );
         }
       } catch (error) {
         console.error("❌ game-ended error:", error);
@@ -533,13 +503,12 @@ module.exports = function registerSocketHandlers(io, app) {
     });
 
     /* ========================================
-       GET QUEUE STATUS (ADMIN/DEBUG)
+       QUEUE STATUS
     ======================================== */
     socket.on("get-queue-status", async () => {
       try {
         const status = await matchmakingService.getQueueStatus();
         const avgWaitTime = await matchmakingService.getAverageWaitTime();
-
         socket.emit("queue-status", {
           ...status,
           averageWaitTime: avgWaitTime,
@@ -553,11 +522,6 @@ module.exports = function registerSocketHandlers(io, app) {
     /* ========================================
        REMATCH SYSTEM
     ======================================== */
-
-    /**
-     * REQUEST REMATCH
-     * Client sends: { }
-     */
     socket.on("request-rematch", async () => {
       try {
         const player = playerManager.getPlayer(socket.id);
@@ -572,29 +536,20 @@ module.exports = function registerSocketHandlers(io, app) {
           );
         }
 
-        const result = await gameRoom.requestRematch(player.id);
+        await gameRoom.requestRematch(player.id);
 
-        // Notify both players
         gameRoom.getPlayers().forEach((p) => {
           io.to(p.socketId).emit("rematch-requested", {
             requestedBy: player.username,
             rematchStatus: gameRoom.getRematchStatus(),
           });
         });
-
-        console.log(
-          `📢 Rematch requested by ${player.username} in room ${gameRoom.id}`,
-        );
       } catch (error) {
         console.error("❌ request-rematch error:", error);
         socket.emit("error", { message: error.message });
       }
     });
 
-    /**
-     * ACCEPT REMATCH
-     * Client sends: { }
-     */
     socket.on("accept-rematch", async () => {
       try {
         const player = playerManager.getPlayer(socket.id);
@@ -603,13 +558,11 @@ module.exports = function registerSocketHandlers(io, app) {
         const gameRoom = gameRoomManager.getPlayerGameRoom(player.id);
         if (!gameRoom) throw new Error("Game room not found");
 
-        if (!gameRoom.rematchRequested) {
+        if (!gameRoom.rematchRequested)
           throw new Error("No rematch request pending");
-        }
 
         const result = await gameRoom.acceptRematch(player.id);
 
-        // Notify both players
         gameRoom.getPlayers().forEach((p) => {
           io.to(p.socketId).emit("rematch-status-update", {
             acceptedBy: player.username,
@@ -617,14 +570,9 @@ module.exports = function registerSocketHandlers(io, app) {
           });
         });
 
-        // If both players accepted, prepare for new game
         if (result.allAccepted) {
-          console.log(`🎮 Both players accepted rematch! Creating new game...`);
-
-          // Reset game for rematch
           gameRoom.resetForRematch();
 
-          // Notify players that new game is starting
           gameRoom.getPlayers().forEach((p) => {
             io.to(p.socketId).emit("rematch-accepted", {
               message: "Rematch accepted by both players!",
@@ -632,10 +580,8 @@ module.exports = function registerSocketHandlers(io, app) {
             });
           });
 
-          // Start the rematch game after 3 seconds
           setTimeout(() => {
             gameRoom.startGame();
-
             gameRoom.getPlayers().forEach((p) => {
               io.to(p.socketId).emit("game-started", {
                 gameState: gameRoom.getGameState(),
@@ -644,8 +590,7 @@ module.exports = function registerSocketHandlers(io, app) {
                 isRematch: true,
               });
             });
-
-            console.log(`🎮 Rematch game started for room ${gameRoom.id}`);
+            console.log(`🎮 Rematch started for room ${gameRoom.id}`);
           }, 3000);
         }
       } catch (error) {
@@ -654,10 +599,6 @@ module.exports = function registerSocketHandlers(io, app) {
       }
     });
 
-    /**
-     * DECLINE REMATCH
-     * Client sends: { }
-     */
     socket.on("decline-rematch", async () => {
       try {
         const player = playerManager.getPlayer(socket.id);
@@ -668,27 +609,18 @@ module.exports = function registerSocketHandlers(io, app) {
 
         const result = await gameRoom.declineRematch(player.id);
 
-        // Notify both players
         gameRoom.getPlayers().forEach((p) => {
           io.to(p.socketId).emit("rematch-declined", {
             declinedBy: player.username,
             message: result.message,
           });
         });
-
-        console.log(
-          `❌ Rematch declined by ${player.username} in room ${gameRoom.id}`,
-        );
       } catch (error) {
         console.error("❌ decline-rematch error:", error);
         socket.emit("error", { message: error.message });
       }
     });
 
-    /**
-     * GET REMATCH STATUS
-     * Client sends: { }
-     */
     socket.on("get-rematch-status", () => {
       try {
         const player = playerManager.getPlayer(socket.id);
@@ -708,10 +640,6 @@ module.exports = function registerSocketHandlers(io, app) {
       }
     });
 
-    /**
-     * EXIT POST-GAME LOBBY
-     * Client sends: { }
-     */
     socket.on("exit-post-game", async () => {
       try {
         const player = playerManager.getPlayer(socket.id);
@@ -720,10 +648,8 @@ module.exports = function registerSocketHandlers(io, app) {
         const gameRoom = gameRoomManager.getPlayerGameRoom(player.id);
         if (!gameRoom) throw new Error("Game room not found");
 
-        // Mark player as left
         player.isInGame = false;
 
-        // Notify opponent
         const opponent = gameRoom.getOpposingPlayer(player.id);
         if (opponent && opponent.socketId) {
           io.to(opponent.socketId).emit("opponent-left-lobby", {
@@ -731,25 +657,17 @@ module.exports = function registerSocketHandlers(io, app) {
           });
         }
 
-        // Remove game room if both players have left
         const hasPlayersInLobby = gameRoom
           .getPlayers()
           .some((p) => gameRoomManager.getPlayerGameRoom(p.id) !== null);
 
         if (!hasPlayersInLobby || gameRoom.gameState === "lobby-expired") {
           gameRoomManager.removeGameRoom(gameRoom.id);
-          console.log(
-            `🗑️ Post-game lobby removed: ${gameRoom.id} (${player.username} exited)`,
-          );
         }
 
         socket.emit("exited-post-game", {
           message: "You have left the post-game lobby.",
         });
-
-        console.log(
-          `👋 ${player.username} exited post-game lobby for room ${gameRoom.id}`,
-        );
       } catch (error) {
         console.error("❌ exit-post-game error:", error);
         socket.emit("error", { message: error.message });
@@ -758,49 +676,44 @@ module.exports = function registerSocketHandlers(io, app) {
 
     /* ========================================
        DISCONNECT HANDLER
+       ✅ FIX: Keep userId→socketId mapping alive for 10s
+       so fast reconnects don't lose registration
     ======================================== */
     socket.on("disconnect", async () => {
       console.log(`👋 Player disconnected: ${socket.id}`);
 
       const player = playerManager.getPlayer(socket.id);
-      if (!player) {
-        return;
-      }
+      if (!player) return;
 
       console.log(`🔍 Handling disconnect for ${player.username}`);
 
-      // 1. HANDLE PENDING CHALLENGES
-      await challengeController.handlePlayerDisconnect(player.id);
-      console.log("✅ Challenge cleanup completed");
+      // ✅ Don't immediately delete userId mapping — wait 10s for reconnect
+      // If player reconnects within 10s and re-registers, the new register-player
+      // call will update the mapping before this timeout fires
+      const disconnectedUserId = player.id;
+      setTimeout(() => {
+        if (userIdToSocketId.get(disconnectedUserId) === socket.id) {
+          userIdToSocketId.delete(disconnectedUserId);
+          console.log(`🗑️ Cleared stale userId mapping for ${player.username}`);
+        }
+      }, 10000);
 
-      // 2. CHECK IF IN GAME ROOM
+      await challengeController.handlePlayerDisconnect(player.id);
+
       const gameRoom = gameRoomManager.getPlayerGameRoom(player.id);
 
-      // 3. REMOVE FROM MATCHMAKING QUEUE (Only if NOT in a game)
       if (!gameRoom) {
         await matchmakingService.removeFromQueue(player);
         console.log("✅ Removed from matchmaking queue");
-      } else {
-        console.log(
-          "ℹ️ Player is in a game room, skipping queue removal to preserve state",
-        );
       }
 
-      // 4. HANDLE GAME ROOM DISCONNECTION
-
       if (gameRoom) {
-        console.log(`🎮 ${player.username} was in game room: ${gameRoom.id}`);
-
-        // Check if game is active or waiting
         if (
           gameRoom.gameState === "active" ||
           gameRoom.gameState === "waiting"
         ) {
-          // ✅ Implement grace period - don't immediately end game
-          const graceResult = await gameRoom.handlePlayerDisconnect(player.id);
-          console.log(`⏳ Grace period started for ${player.username}`);
+          await gameRoom.handlePlayerDisconnect(player.id);
 
-          // Notify opponent
           const opponent = gameRoom.getOpposingPlayer(player.id);
           if (opponent && opponent.socketId) {
             io.to(opponent.socketId).emit("opponent-disconnected", {
@@ -810,35 +723,27 @@ module.exports = function registerSocketHandlers(io, app) {
             });
           }
         } else if (gameRoom.gameState === "post-game") {
-          // Player disconnected during post-game lobby
           const opponent = gameRoom.getOpposingPlayer(player.id);
           if (opponent && opponent.socketId) {
             io.to(opponent.socketId).emit("opponent-left-lobby", {
               message: `${player.username} left the post-game lobby.`,
             });
           }
-
-          // Remove game room
           gameRoomManager.removeGameRoom(gameRoom.id);
-          console.log(`🗑️ Post-game lobby removed: ${gameRoom.id}`);
         }
       }
 
-      // 4. REMOVE PLAYER (with grace period for reconnect)
       playerManager.removePlayer(socket.id);
       console.log(`🗑️ Player removed: ${player.username}`);
     });
   });
 
-  // Cleanup on server shutdown
   process.on("SIGTERM", async () => {
-    console.log("🛑 Server shutting down, cleaning up...");
     await challengeController.destroy();
     await matchmakingService.destroy();
   });
 
   process.on("SIGINT", async () => {
-    console.log("🛑 Server interrupted, cleaning up...");
     await challengeController.destroy();
     await matchmakingService.destroy();
   });
