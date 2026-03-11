@@ -468,156 +468,6 @@ exports.deleteAllFriendship = async (req, res) => {
   }
 };
 
-exports.myFriendList = async (req, res) => {
-  const { _id } = req.user;
-  const targetLanguage = req.query.targetLanguage || "English";
-
-  try {
-    // 1️⃣ Fetch all accepted friendships
-    const friendships = await Friend.find({
-      status: "accepted",
-      $or: [{ requester: _id }, { recipient: _id }],
-    })
-      .populate({
-        path: "requester",
-        select:
-          "username email firstName lastName gender country profileImage pr",
-      })
-      .populate({
-        path: "recipient",
-        select:
-          "username email firstName lastName gender country profileImage pr",
-      })
-      .sort({ updatedAt: -1 });
-
-    // 2️⃣ Map friends data
-    const friends = friendships.map((f) => {
-      const friend =
-        f.requester._id.toString() === _id.toString()
-          ? f.recipient
-          : f.requester;
-
-      const prArray = Object.entries(friend.pr || {}).map(([mode, levels]) => ({
-        mode,
-        ...levels,
-      }));
-
-      return {
-        _id: friend._id,
-        username: friend.username,
-        email: friend.email,
-        firstName: friend.firstName,
-        lastName: friend.lastName,
-        gender: friend.gender,
-        country: friend.country,
-        profileImage: friend.profileImage,
-        pr: prArray,
-        friendshipStatus: "accepted",
-      };
-    });
-
-    // 3️⃣ Skip translation if English
-    if (targetLanguage.toLowerCase() === "english") {
-      return res.status(200).json({
-        success: true,
-        total: friends.length,
-        friends,
-      });
-    }
-
-    // 4️⃣ Prepare page content for translation
-    const pageContent = {
-      usernames: friends.map((f) => f.username),
-      countries: friends.map((f) => f.country),
-    };
-
-    // 5️⃣ Call helper function for translation
-    const translated = await translatePageContent(pageContent, targetLanguage);
-
-    // 6️⃣ Merge translated values
-    const translatedFriends = friends.map((f, i) => ({
-      ...f,
-      username: translated.usernames?.[i] || f.username,
-      country: translated.countries?.[i] || f.country,
-    }));
-
-    return res.status(200).json({
-      success: true,
-      total: translatedFriends.length,
-      friends: translatedFriends,
-    });
-  } catch (error) {
-    console.error("Error fetching friend list:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
-  }
-};
-
-// exports.myFriendList = async (req, res) => {
-//   const { _id } = req.user; // logged-in user
-
-//   try {
-//     // 1️⃣ Find accepted friendships
-//     const friendships = await Friend.find({
-//       status: "accepted",
-//       $or: [{ requester: _id }, { recipient: _id }],
-//     })
-//       .populate({
-//         path: "requester",
-//         select:
-//           "username email firstName lastName gender country profileImage pr",
-//       })
-//       .populate({
-//         path: "recipient",
-//         select:
-//           "username email firstName lastName gender country profileImage pr",
-//       })
-//       .sort({ updatedAt: -1 });
-
-//     // 2️⃣ Extract ONLY friend data (not logged-in user)
-//     const friends = friendships.map((f) => {
-//       const friend =
-//         f.requester._id.toString() === _id.toString()
-//           ? f.recipient
-//           : f.requester;
-
-//       // Convert PR object → array
-//       const prArray = Object.entries(friend.pr || {}).map(([mode, levels]) => ({
-//         mode,
-//         ...levels,
-//       }));
-
-//       return {
-//         _id: friend._id,
-//         username: friend.username,
-//         email: friend.email,
-//         firstName: friend.firstName,
-//         lastName: friend.lastName,
-//         gender: friend.gender,
-//         country: friend.country,
-//         profileImage: friend.profileImage,
-//         pr: prArray,
-//         friendshipStatus: "accepted",
-//       };
-//     });
-
-//     return res.status(200).json({
-//       success: true,
-//       total: friends.length,
-//       friends,
-//     });
-//   } catch (error) {
-//     console.error("Error fetching friend list:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Server error",
-//     });
-//   }
-// };
-
 exports.deleteFriendshipByUser = async (req, res) => {
   const { _id } = req.user; // logged-in user
   const { friendId } = req.body; // other user's id
@@ -665,22 +515,146 @@ exports.deleteFriendshipByUser = async (req, res) => {
   }
 };
 
-// Helper function to translate content
-async function translatePageContent(pageContent, targetLanguage) {
-  try {
-    const response = await axios.post(
-      "http://localhost:3000/api/auth/translate",
-      {
-        pageContent,
-        targetLanguage,
-      },
-    );
-    return response.data.translatedContent;
-  } catch (err) {
-    console.error("Translation API error:", err);
-    return pageContent; // fallback: return original if translation fails
-  }
+// ---------------- Translation Helper ----------------
+// ✅ Google GTX (Best for names)
+async function translateWithGoogle(text, targetLanguage) {
+  const response = await axios.get(
+    "https://translate.googleapis.com/translate_a/single",
+    {
+      params: { client: "gtx", sl: "en", tl: targetLanguage, dt: "t", q: text },
+      timeout: 6000,
+    },
+  );
+  const result = response.data[0].map((chunk) => chunk[0]).join("");
+  if (!result) throw new Error("Google GTX returned empty");
+  return result;
 }
+
+// ✅ MyMemory fallback
+async function translateWithMyMemory(text, targetLanguage) {
+  const response = await axios.get("https://api.mymemory.translated.net/get", {
+    params: { q: text, langpair: `en|${targetLanguage}` },
+    timeout: 6000,
+  });
+  const result = response.data.responseData.translatedText;
+  if (!result) throw new Error("MyMemory returned empty");
+  return result;
+}
+
+// ✅ Lingva fallback
+async function translateWithLingva(text, targetLanguage) {
+  const response = await axios.get(
+    `https://lingva.lunar.icu/api/v1/en/${targetLanguage}/${encodeURIComponent(
+      text,
+    )}`,
+    { timeout: 6000 },
+  );
+  const result = response.data.translation;
+  if (!result) throw new Error("Lingva returned empty");
+  return result;
+}
+
+// Main translation function
+async function translateText(text, targetLanguage) {
+  if (!text || typeof text !== "string") return text;
+  if (targetLanguage.toLowerCase() === "en") return text;
+
+  const apis = [
+    { name: "Google", fn: () => translateWithGoogle(text, targetLanguage) },
+    { name: "MyMemory", fn: () => translateWithMyMemory(text, targetLanguage) },
+    { name: "Lingva", fn: () => translateWithLingva(text, targetLanguage) },
+  ];
+
+  for (const api of apis) {
+    try {
+      const result = await api.fn();
+      return result;
+    } catch (err) {
+      console.warn(`[${api.name}] failed: ${err.message}`);
+    }
+  }
+
+  return text; // fallback
+}
+
+// Translate list of users
+async function translateUsers(users, targetLanguage) {
+  return Promise.all(
+    users.map(async (user) => {
+      const [username, country] = await Promise.all([
+        translateText(user.username, targetLanguage),
+        translateText(user.country, targetLanguage),
+      ]);
+      return { ...user, username, country };
+    }),
+  );
+}
+//------------------ End of Translation Helper ----------------
+
+// ---------------- My Friend List ----------------
+exports.myFriendList = async (req, res) => {
+  const { _id } = req.user;
+  try {
+    const friendships = await Friend.find({
+      status: "accepted",
+      $or: [{ requester: _id }, { recipient: _id }],
+    })
+      .populate({
+        path: "requester",
+        select:
+          "username email firstName lastName gender country profileImage pr",
+      })
+      .populate({
+        path: "recipient",
+        select:
+          "username email firstName lastName gender country profileImage pr",
+      })
+      .sort({ updatedAt: -1 });
+
+    let friends = friendships.map((f) => {
+      const friend =
+        f.requester._id.toString() === _id.toString()
+          ? f.recipient
+          : f.requester;
+
+      const prArray = Object.entries(friend.pr || {}).map(([mode, levels]) => ({
+        mode,
+        ...levels,
+      }));
+
+      return {
+        _id: friend._id,
+        username: friend.username,
+        email: friend.email,
+        firstName: friend.firstName,
+        lastName: friend.lastName,
+        gender: friend.gender,
+        country: friend.country,
+        profileImage: friend.profileImage,
+        pr: prArray,
+        friendshipStatus: "accepted",
+      };
+    });
+
+    // ✅ Translate username & country
+    friends = await translateUsers(
+      friends,
+      req.query.targetLanguage || "English",
+    );
+
+    return res.status(200).json({
+      success: true,
+      total: friends.length,
+      friends,
+    });
+  } catch (error) {
+    console.error("Error fetching friend list:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
 
 // ---------------- Top 100 Friends ----------------
 exports.top100FriendList = async (req, res) => {
@@ -688,14 +662,12 @@ exports.top100FriendList = async (req, res) => {
     const userId = req.user.id;
     const targetLanguage = req.query.targetLanguage || "English";
 
-    // 1️⃣ Get logged-in player
     const player = await Player.findById(userId);
     if (!player)
       return res
         .status(404)
         .json({ success: false, message: "Player not found" });
 
-    // 2️⃣ Determine strongest level
     const { easy, medium, hard } = player.pr.pvp;
     let level =
       easy >= medium && easy >= hard
@@ -704,7 +676,6 @@ exports.top100FriendList = async (req, res) => {
           ? "medium"
           : "hard";
 
-    // 3️⃣ Get accepted friends
     const friendships = await Friend.find({
       status: "accepted",
       $or: [{ requester: userId }, { recipient: userId }],
@@ -714,7 +685,6 @@ exports.top100FriendList = async (req, res) => {
       f.requester.toString() === userId ? f.recipient : f.requester,
     );
 
-    // 4️⃣ Get top 100 friends based on level
     let topFriends = await Player.find({
       _id: { $in: friendIds },
       "accountStatus.state": "active",
@@ -724,22 +694,8 @@ exports.top100FriendList = async (req, res) => {
       .select("username country profileImage pr")
       .lean();
 
-    // 5️⃣ Translate if not English
-    if (targetLanguage.toLowerCase() !== "english") {
-      const pageContent = {
-        usernames: topFriends.map((f) => f.username),
-        countries: topFriends.map((f) => f.country),
-      };
-      const translated = await translatePageContent(
-        pageContent,
-        targetLanguage,
-      );
-      topFriends = topFriends.map((f, i) => ({
-        ...f,
-        username: translated.usernames?.[i] || f.username,
-        country: translated.countries?.[i] || f.country,
-      }));
-    }
+    // ✅ Translate usernames & countries
+    topFriends = await translateUsers(topFriends, targetLanguage);
 
     res.status(200).json({
       success: true,
@@ -784,21 +740,8 @@ exports.top10CountryList = async (req, res) => {
       .select("username profileImage country pr")
       .lean();
 
-    if (targetLanguage.toLowerCase() !== "english") {
-      const pageContent = {
-        usernames: players.map((p) => p.username),
-        countries: players.map((p) => p.country),
-      };
-      const translated = await translatePageContent(
-        pageContent,
-        targetLanguage,
-      );
-      players = players.map((p, i) => ({
-        ...p,
-        username: translated.usernames?.[i] || p.username,
-        country: translated.countries?.[i] || p.country,
-      }));
-    }
+    // ✅ Translate usernames & countries
+    players = await translateUsers(players, targetLanguage);
 
     res.status(200).json({
       success: true,
@@ -838,21 +781,8 @@ exports.top10GlobalList = async (req, res) => {
       .select("username country profileImage pr")
       .lean();
 
-    if (targetLanguage.toLowerCase() !== "english") {
-      const pageContent = {
-        usernames: players.map((p) => p.username),
-        countries: players.map((p) => p.country),
-      };
-      const translated = await translatePageContent(
-        pageContent,
-        targetLanguage,
-      );
-      players = players.map((p, i) => ({
-        ...p,
-        username: translated.usernames?.[i] || p.username,
-        country: translated.countries?.[i] || p.country,
-      }));
-    }
+    // ✅ Translate usernames & countries
+    players = await translateUsers(players, targetLanguage);
 
     res.status(200).json({
       success: true,
