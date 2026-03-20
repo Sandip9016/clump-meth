@@ -611,30 +611,34 @@ exports.myFriendList = async (req, res) => {
       })
       .sort({ updatedAt: -1 });
 
-    let friends = friendships.map((f) => {
-      const friend =
-        f.requester._id.toString() === _id.toString()
-          ? f.recipient
-          : f.requester;
+    let friends = friendships
+      .filter((f) => f.requester && f.recipient)
+      .map((f) => {
+        const friend =
+          f.requester?._id?.toString() === _id.toString()
+            ? f.recipient
+            : f.requester;
 
-      const prArray = Object.entries(friend.pr || {}).map(([mode, levels]) => ({
-        mode,
-        ...levels,
-      }));
+        const prArray = Object.entries(friend.pr || {}).map(
+          ([mode, levels]) => ({
+            mode,
+            ...levels,
+          }),
+        );
 
-      return {
-        _id: friend._id,
-        username: friend.username,
-        email: friend.email,
-        firstName: friend.firstName,
-        lastName: friend.lastName,
-        gender: friend.gender,
-        country: friend.country,
-        profileImage: friend.profileImage,
-        pr: prArray,
-        friendshipStatus: "accepted",
-      };
-    });
+        return {
+          _id: friend?._id,
+          username: friend.username,
+          email: friend.email,
+          firstName: friend.firstName,
+          lastName: friend.lastName,
+          gender: friend.gender,
+          country: friend.country,
+          profileImage: friend.profileImage,
+          pr: prArray,
+          friendshipStatus: "accepted",
+        };
+      });
 
     // ✅ Translate username & country
     friends = await translateUsers(
@@ -684,6 +688,8 @@ exports.top100FriendList = async (req, res) => {
     const friendIds = friendships.map((f) =>
       f.requester.toString() === userId ? f.recipient : f.requester,
     );
+    // ✅ Include self
+    friendIds.push(userId);
 
     let topFriends = await Player.find({
       _id: { $in: friendIds },
