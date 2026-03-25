@@ -499,7 +499,7 @@ module.exports = function registerSocketHandlers(io, app) {
         }
       } catch (error) {
         console.error("❌ game-ended error:", error);
-      }
+       }
     });
 
     /* ========================================

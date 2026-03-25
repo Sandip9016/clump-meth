@@ -17,7 +17,6 @@ const playerSchema = new mongoose.Schema(
     username: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
     },
     email: {
@@ -185,7 +184,7 @@ const playerSchema = new mongoose.Schema(
     timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
-  }
+  },
 );
 
 // ================================
@@ -233,7 +232,7 @@ playerSchema.methods.updatePvPStats = function (difficulty, won, draw = false) {
   // Calculate win rate
   if (diffStats.gamesPlayed > 0) {
     diffStats.winRate = Math.round(
-      (diffStats.wins / diffStats.gamesPlayed) * 100
+      (diffStats.wins / diffStats.gamesPlayed) * 100,
     );
   }
 
@@ -250,7 +249,7 @@ playerSchema.methods.updatePvPStats = function (difficulty, won, draw = false) {
   // Calculate overall win rate
   if (this.stats.overall.totalGames > 0) {
     this.stats.overall.overallWinRate = Math.round(
-      (this.stats.overall.totalWins / this.stats.overall.totalGames) * 100
+      (this.stats.overall.totalWins / this.stats.overall.totalGames) * 100,
     );
   }
 
@@ -272,7 +271,7 @@ playerSchema.methods.updatePracticeStats = function (difficulty, score) {
   // Update total and average score
   diffStats.totalScore += score;
   diffStats.averageScore = Math.round(
-    diffStats.totalScore / diffStats.gamesPlayed
+    diffStats.totalScore / diffStats.gamesPlayed,
   );
 
   return this.save();
@@ -387,7 +386,7 @@ playerSchema.statics.findByRatingRange = function (
   mode,
   difficulty,
   minRating,
-  maxRating
+  maxRating,
 ) {
   const ratingField = `pr.${mode}.${difficulty}`;
   return this.find({
@@ -429,7 +428,10 @@ playerSchema.statics.getGlobalStats = async function () {
 // INDEXES
 // ================================
 
-playerSchema.index({ username: 1 });
+playerSchema.index(
+  { username: 1 },
+  { unique: true, collation: { locale: "en", strength: 2 } },
+);
 playerSchema.index({ email: 1 });
 playerSchema.index({ "pr.pvp.easy": -1 });
 playerSchema.index({ "pr.pvp.medium": -1 });

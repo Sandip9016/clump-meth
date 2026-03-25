@@ -40,7 +40,11 @@ exports.signup = async (req, res) => {
     if (await Player.findOne({ email })) {
       return res.status(400).json({ message: "Email already in use" });
     }
-    if (await Player.findOne({ username })) {
+    const existingUser = await Player.findOne({
+      username: username.trim(),
+    }).collation({ locale: "en", strength: 2 });
+
+    if (existingUser) {
       return res.status(400).json({ message: "Username already taken" });
     }
 
@@ -52,7 +56,7 @@ exports.signup = async (req, res) => {
       // 🔒 If locked
       if (existingOtp.lockedUntil && Date.now() < existingOtp.lockedUntil) {
         const remainingMinutes = Math.ceil(
-          (existingOtp.lockedUntil - Date.now()) / 60000
+          (existingOtp.lockedUntil - Date.now()) / 60000,
         );
         return res.status(429).json({
           success: false,
@@ -228,7 +232,7 @@ exports.resendSignupOTP = async (req, res) => {
     // 🔒 Check if account is locked
     if (record.lockedUntil && Date.now() < record.lockedUntil) {
       const remainingMinutes = Math.ceil(
-        (record.lockedUntil - Date.now()) / 60000
+        (record.lockedUntil - Date.now()) / 60000,
       );
       return res.status(429).json({
         success: false,
@@ -490,7 +494,7 @@ exports.verifyForgotPasswordOtp = async (req, res) => {
     // Check if locked
     if (record.lockedUntil && Date.now() < record.lockedUntil) {
       const remainingMinutes = Math.ceil(
-        (record.lockedUntil - Date.now()) / 60000
+        (record.lockedUntil - Date.now()) / 60000,
       );
       return res.status(429).json({
         success: false,
@@ -653,7 +657,7 @@ exports.resendForgotPasswordOtp = async (req, res) => {
     // Check if locked
     if (record.lockedUntil && Date.now() < record.lockedUntil) {
       const remainingTime = Math.ceil(
-        (record.lockedUntil - Date.now()) / 60000
+        (record.lockedUntil - Date.now()) / 60000,
       );
       return res.status(429).json({
         success: false,
@@ -719,7 +723,6 @@ exports.allUserList = async (req, res) => {
   }
 };
 
-
 // POST /api/auth/save-fcmToken
 exports.saveFcmToken = async (req, res) => {
   try {
@@ -779,7 +782,7 @@ exports.getUserById = async (req, res) => {
     }
 
     const user = await Player.findById(userId).select(
-      "-password -createdAt -updatedAt -__v"
+      "-password -createdAt -updatedAt -__v",
     );
 
     if (!user) {
