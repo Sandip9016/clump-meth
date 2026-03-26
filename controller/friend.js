@@ -249,14 +249,20 @@ exports.searchUser = async (req, res) => {
   const { searchText } = req.body;
 
   try {
-    // 1️⃣ Build base query (same as userList)
+    // 1️⃣ Build base query (exclude self)
     const query = {
-      _id: { $ne: _id }, // exclude self
+      _id: { $ne: _id },
     };
 
-    // 2️⃣ Apply search filter
+    // 2️⃣ Apply search filter for username, name, or email
     if (searchText && searchText.trim() !== "") {
-      query.username = { $regex: searchText, $options: "i" };
+      const regex = new RegExp(searchText, "i"); // case-insensitive regex
+      query.$or = [
+        { username: { $regex: regex } },
+        { email: { $regex: regex } },
+        { firstName: { $regex: regex } },
+        { lastName: { $regex: regex } },
+      ];
     }
 
     // 3️⃣ Fetch users
@@ -280,7 +286,7 @@ exports.searchUser = async (req, res) => {
       friendshipMap[otherUserId] = f.status;
     });
 
-    // 6️⃣ Format users (SAME AS userList)
+    // 6️⃣ Format users
     const userList = users.map((user) => {
       const u = user.toObject();
 
