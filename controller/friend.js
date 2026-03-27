@@ -672,32 +672,46 @@ exports.top100FriendList = async (req, res) => {
     const userId = req.user.id;
     const targetLanguage = req.query.targetLanguage || "English";
 
-    const player = await Player.findById(userId);
-    if (!player)
-      return res
-        .status(404)
-        .json({ success: false, message: "Player not found" });
+    // 1. Get current player
+    const player = await Player.findById(userId).lean();
+    if (!player) {
+      return res.status(404).json({
+        success: false,
+        message: "Player not found",
+      });
+    }
 
-    const { easy, medium, hard } = player.pr.pvp;
-    let level =
+    // 2. Determine strongest level
+    const { easy = 0, medium = 0, hard = 0 } = player.pr.pvp;
+    const level =
       easy >= medium && easy >= hard
         ? "easy"
         : medium >= easy && medium >= hard
           ? "medium"
           : "hard";
 
+    const userScore = player.pr.pvp[level];
+
+    // 3. Get accepted friends
     const friendships = await Friend.find({
       status: "accepted",
       $or: [{ requester: userId }, { recipient: userId }],
     }).select("requester recipient");
 
-    const friendIds = friendships.map((f) =>
-      f.requester.toString() === userId ? f.recipient : f.requester,
-    );
-    // ✅ Include self
+    // 4. Extract unique friend IDs and include self
+    const friendIds = [
+      ...new Set(
+        friendships.map((f) =>
+          f.requester.toString() === userId
+            ? f.recipient.toString()
+            : f.requester.toString(),
+        ),
+      ),
+    ];
     friendIds.push(userId);
 
-    let topFriends = await Player.find({
+    // 5. Fetch friends including self
+    let friends = await Player.find({
       _id: { $in: friendIds },
       "accountStatus.state": "active",
     })
@@ -706,15 +720,40 @@ exports.top100FriendList = async (req, res) => {
       .select("username country profileImage pr")
       .lean();
 
-    // ✅ Translate usernames & countries
-    topFriends = await translateUsers(topFriends, targetLanguage);
+    // 6. Map friends to include score and rank
+    friends = friends.map((p, i) => ({
+      username: p.username,
+      country: p.country,
+      profileImage: p.profileImage,
+      score: p.pr?.pvp?.[level] || 0,
+      rank: i + 1,
+    }));
 
+    // 7. Ensure current user is included
+    let currentUser = friends.find((p) => p.username === player.username);
+    if (!currentUser) {
+      currentUser = {
+        username: player.username,
+        country: player.country,
+        profileImage: player.profileImage,
+        score: userScore,
+        rank: friends.length + 1,
+      };
+      friends.push(currentUser);
+    }
+
+    // 8. Translate usernames & countries
+    friends = await translateUsers(friends, targetLanguage);
+    currentUser = friends.find((p) => p.username === player.username);
+
+    // 9. Send response
     res.status(200).json({
       success: true,
-      msg: `Top 100 friends based on your strongest level: ${level}`,
+      message: `Top 100 friends based on your strongest level: ${level}`,
       playerLevel: level,
-      count: topFriends.length,
-      data: topFriends,
+      count: friends.length,
+      currentUser,
+      data: friends,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -727,22 +766,25 @@ exports.top10CountryList = async (req, res) => {
     const userId = req.user.id;
     const targetLanguage = req.query.targetLanguage || "English";
 
-    const player = await Player.findById(userId);
+    // 1. Get current player
+    const player = await Player.findById(userId).lean();
     if (!player)
       return res
         .status(404)
         .json({ success: false, message: "Player not found" });
 
-    const { easy, medium, hard } = player.pr.pvp;
-    let level =
+    // 2. Determine strongest level
+    const { easy = 0, medium = 0, hard = 0 } = player.pr.pvp;
+    const level =
       easy >= medium && easy >= hard
         ? "easy"
         : medium >= easy && medium >= hard
           ? "medium"
           : "hard";
-
+    const userScore = player.pr.pvp[level];
     const country = player.country;
 
+    // 3. Get top 10 in the country
     let players = await Player.find({
       country,
       "accountStatus.state": "active",
@@ -752,13 +794,39 @@ exports.top10CountryList = async (req, res) => {
       .select("username profileImage country pr")
       .lean();
 
-    // ✅ Translate usernames & countries
+    // 4. Map players to include score & rank
+    players = players.map((p, i) => ({
+      username: p.username,
+      country: p.country,
+      profileImage: p.profileImage,
+      score: p.pr?.pvp?.[level] || 0,
+      rank: i + 1,
+    }));
+
+    // 5. Translate usernames & countries
     players = await translateUsers(players, targetLanguage);
 
+    // 6. Get current user's rank in country
+    const higherCount = await Player.countDocuments({
+      country,
+      "accountStatus.state": "active",
+      [`pr.pvp.${level}`]: { $gt: userScore },
+    });
+
+    const currentUser = {
+      username: player.username,
+      country: player.country,
+      profileImage: player.profileImage,
+      score: userScore,
+      rank: higherCount + 1,
+    };
+
+    // 7. Send response
     res.status(200).json({
       success: true,
       msg: `Top 10 players in your country (${country}) for your level: ${level}`,
       playerLevel: level,
+      currentUser,
       count: players.length,
       data: players,
     });
@@ -767,19 +835,24 @@ exports.top10CountryList = async (req, res) => {
   }
 };
 
-// ---------------- Top 10 Global ----------------
+// ---------------- Top 10 Global player rank and below 10 players ----------------
 exports.top10GlobalList = async (req, res) => {
   try {
     const userId = req.user.id;
     const targetLanguage = req.query.targetLanguage || "English";
 
-    const player = await Player.findById(userId);
-    if (!player)
-      return res
-        .status(404)
-        .json({ success: false, message: "Player not found" });
+    // 1. Get current player
+    const player = await Player.findById(userId).lean();
+    if (!player) {
+      return res.status(404).json({
+        success: false,
+        message: "Player not found",
+      });
+    }
 
-    const { easy, medium, hard } = player.pr.pvp;
+    // 2. Determine best level
+    const { easy = 0, medium = 0, hard = 0 } = player.pr.pvp;
+
     let level =
       easy >= medium && easy >= hard
         ? "easy"
@@ -787,23 +860,75 @@ exports.top10GlobalList = async (req, res) => {
           ? "medium"
           : "hard";
 
-    let players = await Player.find({ "accountStatus.state": "active" })
+    const userScore = player.pr.pvp[level];
+
+    // 3. Get Top 10 players
+    let top10 = await Player.find({ "accountStatus.state": "active" })
       .sort({ [`pr.pvp.${level}`]: -1 })
       .limit(10)
       .select("username country profileImage pr")
       .lean();
 
-    // ✅ Translate usernames & countries
-    players = await translateUsers(players, targetLanguage);
+    // 4. Calculate user rank
+    const higherCount = await Player.countDocuments({
+      "accountStatus.state": "active",
+      [`pr.pvp.${level}`]: { $gt: userScore },
+    });
 
+    const userRank = higherCount + 1;
+
+    // 5. Get next 10 players BELOW user
+    let belowPlayers = await Player.find({
+      "accountStatus.state": "active",
+      [`pr.pvp.${level}`]: { $lt: userScore },
+    })
+      .sort({ [`pr.pvp.${level}`]: -1 })
+      .limit(10)
+      .select("username country profileImage pr")
+      .lean();
+
+    // 6. Prepare current user object (same format)
+    let currentUser = {
+      username: player.username,
+      country: player.country,
+      profileImage: player.profileImage,
+      score: userScore,
+      rank: userRank,
+    };
+
+    // 7. Normalize top10 & belowPlayers (add score field)
+    const formatPlayers = (players) =>
+      players.map((p) => ({
+        username: p.username,
+        country: p.country,
+        profileImage: p.profileImage,
+        score: p.pr?.pvp?.[level] || 0,
+      }));
+
+    top10 = formatPlayers(top10);
+    belowPlayers = formatPlayers(belowPlayers);
+
+    // 8. Translate users
+    top10 = await translateUsers(top10, targetLanguage);
+    belowPlayers = await translateUsers(belowPlayers, targetLanguage);
+    currentUser = (await translateUsers([currentUser], targetLanguage))[0];
+
+    // 9. Final response
     res.status(200).json({
       success: true,
-      msg: `Top 10 players globally for your level: ${level}`,
+      message: `Leaderboard for level: ${level}`,
       playerLevel: level,
-      count: players.length,
-      data: players,
+      yourRank: userRank,
+      currentUser,
+      top10Count: top10.length,
+      belowCount: belowPlayers.length,
+      top10,
+      belowPlayers,
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
