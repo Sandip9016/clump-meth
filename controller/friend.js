@@ -706,6 +706,12 @@ exports.top100FriendList = async (req, res) => {
       .select("username country profileImage pr")
       .lean();
 
+    // ✅ Add rank
+    topFriends = topFriends.map((player, index) => ({
+      ...player,
+      rank: index + 1,
+    }));
+
     // ✅ Translate usernames & countries
     topFriends = await translateUsers(topFriends, targetLanguage);
 
@@ -751,6 +757,12 @@ exports.top10CountryList = async (req, res) => {
       .limit(10)
       .select("username profileImage country pr")
       .lean();
+
+    // ✅ Add rank
+    players = players.map((player, index) => ({
+      ...player,
+      rank: index + 1,
+    }));
 
     // ✅ Translate usernames & countries
     players = await translateUsers(players, targetLanguage);
