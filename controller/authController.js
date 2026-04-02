@@ -6,6 +6,8 @@ const Player = require("../models/Player");
 const { sendEmail } = require("../middleware/mail");
 const otpStore = new Map();
 const passOtpStore = new Map();
+const { OAuth2Client } = require("google-auth-library");
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 function generateOTP() {
   return crypto.randomInt(100000, 999999).toString();
@@ -37,9 +39,19 @@ exports.signup = async (req, res) => {
     }
 
     // 1️⃣ Check DB for existing user
-    if (await Player.findOne({ email })) {
+    const existingEmailUser = await Player.findOne({ email });
+
+    if (existingEmailUser) {
+      // ✅ NEW: Check auth provider
+      if (existingEmailUser.authProvider === "google") {
+        return res.status(400).json({
+          message:
+            "This email is registered with Google. Please use Google login.",
+        });
+      }
       return res.status(400).json({ message: "Email already in use" });
     }
+
     const existingUser = await Player.findOne({
       username: username.trim(),
     }).collation({ locale: "en", strength: 2 });
@@ -53,7 +65,6 @@ exports.signup = async (req, res) => {
 
     // 2️⃣ BLOCK if OTP already exists & not expired
     if (existingOtp) {
-      // 🔒 If locked
       if (existingOtp.lockedUntil && Date.now() < existingOtp.lockedUntil) {
         const remainingMinutes = Math.ceil(
           (existingOtp.lockedUntil - Date.now()) / 60000,
@@ -64,7 +75,6 @@ exports.signup = async (req, res) => {
         });
       }
 
-      // ⏳ OTP still valid → do not resend
       if (Date.now() < existingOtp.expiresAt) {
         return res.status(400).json({
           success: false,
@@ -73,11 +83,10 @@ exports.signup = async (req, res) => {
         });
       }
 
-      // ❌ OTP expired → clean it
       otpStore.delete(key);
     }
 
-    // 3️⃣ Create NEW OTP (only now)
+    // 3️⃣ Create NEW OTP
     const otp = generateOTP();
     const expiresAt = Date.now() + 5 * 60 * 1000;
 
@@ -87,7 +96,17 @@ exports.signup = async (req, res) => {
       attempts: 0,
       resendCount: 0,
       lockedUntil: null,
-      userData: { username, email, password, country, dateOfBirth, gender },
+
+      // ✅ NEW: explicitly store authProvider
+      userData: {
+        username,
+        email,
+        password,
+        country,
+        dateOfBirth,
+        gender,
+        authProvider: "local",
+      },
     });
 
     // 4️⃣ Send OTP email
@@ -136,7 +155,7 @@ exports.verifySignupOTP = async (req, res) => {
     const key = email.trim().toLowerCase();
     const record = otpStore.get(key);
 
-    //  No OTP found
+    // ❌ No OTP found
     if (!record) {
       return res.status(400).json({
         success: false,
@@ -144,7 +163,7 @@ exports.verifySignupOTP = async (req, res) => {
       });
     }
 
-    //  OTP expired
+    // ⏳ OTP expired
     if (Date.now() > record.expiresAt) {
       otpStore.delete(key);
       return res.status(400).json({
@@ -157,7 +176,7 @@ exports.verifySignupOTP = async (req, res) => {
     const providedOtp = String(otp).trim();
     const expectedOtp = String(record.otp).trim();
 
-    //  OTP mismatch
+    // ❌ OTP mismatch
     if (providedOtp !== expectedOtp) {
       return res.status(400).json({
         success: false,
@@ -168,6 +187,16 @@ exports.verifySignupOTP = async (req, res) => {
     // ✅ OTP is correct — create account
     const { userData } = record;
 
+    // ✅ NEW: Double-check user doesn't already exist (race condition safety)
+    const existingUser = await Player.findOne({ email: userData.email });
+    if (existingUser) {
+      otpStore.delete(key);
+      return res.status(400).json({
+        success: false,
+        message: "User already exists. Please login instead.",
+      });
+    }
+
     const player = new Player({
       username: userData.username,
       email: userData.email,
@@ -175,6 +204,9 @@ exports.verifySignupOTP = async (req, res) => {
       country: userData.country,
       dateOfBirth: userData.dateOfBirth,
       gender: userData.gender,
+
+      // ✅ NEW: explicitly set auth provider
+      authProvider: userData.authProvider || "local",
     });
 
     await player.save();
@@ -310,6 +342,15 @@ exports.login = async (req, res) => {
       });
     }
 
+    // ✅ NEW: Block Google users from password login
+    if (player.authProvider === "google") {
+      return res.status(400).json({
+        success: false,
+        message:
+          "This account is registered with Google. Please use Google login.",
+      });
+    }
+
     // 2️⃣ Password check
     const isMatch = await player.comparePassword(password);
     if (!isMatch) {
@@ -328,7 +369,6 @@ exports.login = async (req, res) => {
       };
       await player.save();
     } else {
-      // update last active time
       player.accountStatus.lastActiveAt = new Date();
       await player.save();
     }
@@ -338,7 +378,7 @@ exports.login = async (req, res) => {
       expiresIn: "7d",
     });
 
-    // 4️⃣ Response (NO password, NO timestamps)
+    // 4️⃣ Response
     res.json({
       success: true,
       token,
@@ -750,40 +790,26 @@ exports.saveFcmToken = async (req, res) => {
   }
 };
 
-// POST /api/auth/getuser
+//=========================== Update Username ============================
+// PUT /api/auth/update-username
 
-exports.getUser = async (req, res) => {
-  const { _id } = req.user;
+exports.updateUsername = async (req, res) => {
   try {
-    const user = await Player.findById(_id);
+    const userId = req.user.id; // ✅ from auth middleware
+    let { username } = req.body;
 
-    return res.status(200).json({
-      success: true,
-      user,
-    });
-  } catch (error) {
-    console.error("Error fetching users:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
-  }
-};
-
-exports.getUserById = async (req, res) => {
-  try {
-    const { userId } = req.query; // ✅ use query for GET
-
-    if (!userId) {
+    // 1️⃣ Validate input
+    if (!username) {
       return res.status(400).json({
         success: false,
-        message: "userId is required",
+        message: "Username is required",
       });
     }
 
-    const user = await Player.findById(userId).select(
-      "-password -createdAt -updatedAt -__v",
-    );
+    username = username.trim();
+
+    // 2️⃣ Get current user
+    const user = await Player.findById(userId);
 
     if (!user) {
       return res.status(404).json({
@@ -792,15 +818,146 @@ exports.getUserById = async (req, res) => {
       });
     }
 
+    // 3️⃣ Prevent same username (case-insensitive)
+    if (user.username.toLowerCase() === username.toLowerCase()) {
+      return res.status(400).json({
+        success: false,
+        message: "New username must be different",
+      });
+    }
+
+    // 4️⃣ Check uniqueness (case-insensitive like signup)
+    const existingUser = await Player.findOne({
+      username: username,
+    }).collation({ locale: "en", strength: 2 });
+
+    if (existingUser && existingUser._id.toString() !== userId) {
+      return res.status(400).json({
+        success: false,
+        message: "Username already taken",
+      });
+    }
+
+    // 5️⃣ Update username
+    user.username = username;
+    await user.save();
+
     return res.status(200).json({
       success: true,
-      user,
+      message: "Username updated successfully",
+      data: {
+        username: user.username,
+      },
     });
-  } catch (error) {
-    console.error("Error fetching user:", error);
+  } catch (err) {
+    console.error("Update Username Error:", err);
     return res.status(500).json({
       success: false,
       message: "Server error",
+      error: err.message,
+    });
+  }
+};
+
+//=========================== google login ============================
+// POST /api/auth/google-login
+exports.googleLogin = async (req, res) => {
+  try {
+    const { id_token } = req.body;
+
+    if (!id_token) {
+      return res.status(400).json({
+        success: false,
+        message: "id_token is required",
+      });
+    }
+
+    // ✅ Verify Google Token
+    const ticket = await client.verifyIdToken({
+      idToken: id_token,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+
+    const googleId = payload.sub;
+    const email = payload.email;
+    const firstName = payload.given_name || "";
+    const lastName = payload.family_name || "";
+    const profileImage = payload.picture || "";
+
+    // ==============================
+    // CHECK USER BY GOOGLE ID FIRST
+    // ==============================
+    let user = await Player.findOne({ googleId });
+
+    if (user) {
+      // ✅ Existing Google user → LOGIN
+      return res.status(200).json({
+        success: true,
+        message: "Login successful",
+        token: jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+          expiresIn: "7d",
+        }),
+        user,
+      });
+    }
+
+    // ==============================
+    // CHECK USER BY EMAIL (ACCOUNT LINKING)
+    // ==============================
+    user = await Player.findOne({ email });
+
+    if (user) {
+      // ⚠️ Existing LOCAL user → LINK GOOGLE
+      user.googleId = googleId;
+      user.authProvider = "google";
+
+      // Optional: update profile data
+      if (!user.firstName) user.firstName = firstName;
+      if (!user.lastName) user.lastName = lastName;
+      if (!user.profileImage) user.profileImage = profileImage;
+
+      await user.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "Google account linked & login successful",
+        token: jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+          expiresIn: "7d",
+        }),
+        user,
+      });
+    }
+
+    // ==============================
+    // CREATE NEW USER
+    // ==============================
+    const randomSuffix = Math.floor(Math.random() * 10000);
+
+    const newUser = await Player.create({
+      username: `${firstName || "user"}_${randomSuffix}`,
+      email,
+      googleId,
+      authProvider: "google",
+      firstName,
+      lastName,
+      profileImage,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "User created via Google login",
+      token: jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, {
+        expiresIn: "7d",
+      }),
+      user: newUser,
+    });
+  } catch (error) {
+    console.error("Google login error:", error);
+    return res.status(401).json({
+      success: false,
+      message: "Invalid Google token",
     });
   }
 };

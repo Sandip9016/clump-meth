@@ -26,10 +26,27 @@ const playerSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
+    // ✅ Password only required for LOCAL users
     password: {
       type: String,
-      required: true,
       minlength: 6,
+      required: function () {
+        return this.authProvider === "local";
+      },
+    },
+
+    // ✅ NEW: Auth Provider
+    authProvider: {
+      type: String,
+      enum: ["local", "google"],
+      default: "local",
+    },
+
+    // ✅ NEW: Google ID
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true, // allows multiple null values
     },
     gender: {
       type: String,
