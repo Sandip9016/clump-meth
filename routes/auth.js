@@ -17,6 +17,7 @@ router.post("/resend-signup-otp", authController.resendSignupOTP); // Resend OTP
 router.put("/update-username", auth, authController.updateUsername);
 
 router.post("/google-login", authController.googleLogin);
+router.post("/facebook-login", authController.facebookLogin);
 
 //Forgetpassword
 router.post("/sendForgotPassOtp", authController.sendForgotPasswordOtp);

@@ -8,6 +8,7 @@ const otpStore = new Map();
 const passOtpStore = new Map();
 const { OAuth2Client } = require("google-auth-library");
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const axios = require("axios");
 
 function generateOTP() {
   return crypto.randomInt(100000, 999999).toString();
@@ -42,11 +43,13 @@ exports.signup = async (req, res) => {
     const existingEmailUser = await Player.findOne({ email });
 
     if (existingEmailUser) {
-      // ✅ NEW: Check auth provider
-      if (existingEmailUser.authProvider === "google") {
+      if (
+        existingEmailUser.authProviders.includes("google") ||
+        existingEmailUser.authProviders.includes("facebook")
+      ) {
         return res.status(400).json({
           message:
-            "This email is registered with Google. Please use Google login.",
+            "This email is registered with social login. Please use Google or Facebook login.",
         });
       }
       return res.status(400).json({ message: "Email already in use" });
@@ -141,6 +144,7 @@ exports.signup = async (req, res) => {
 };
 
 // POST /api/auth/verify-signup-otp
+// POST /api/auth/verify-signup-otp
 exports.verifySignupOTP = async (req, res) => {
   const { email, otp } = req.body;
 
@@ -184,19 +188,29 @@ exports.verifySignupOTP = async (req, res) => {
       });
     }
 
-    // ✅ OTP is correct — create account
     const { userData } = record;
 
-    // ✅ NEW: Double-check user doesn't already exist (race condition safety)
+    // ✅ Check if user already exists
     const existingUser = await Player.findOne({ email: userData.email });
     if (existingUser) {
       otpStore.delete(key);
+
+      // If user exists and already has social login, block local
+      if (existingUser.authProviders.some((p) => p !== "local")) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "This email is registered with social login. Please use Google or Facebook login.",
+        });
+      }
+
       return res.status(400).json({
         success: false,
         message: "User already exists. Please login instead.",
       });
     }
 
+    // ✅ Create new local user
     const player = new Player({
       username: userData.username,
       email: userData.email,
@@ -205,13 +219,13 @@ exports.verifySignupOTP = async (req, res) => {
       dateOfBirth: userData.dateOfBirth,
       gender: userData.gender,
 
-      // ✅ NEW: explicitly set auth provider
-      authProvider: userData.authProvider || "local",
+      // ✅ Use array for authProviders
+      authProviders: ["local"],
     });
 
     await player.save();
 
-    // Clear OTP after success
+    // Clear OTP
     otpStore.delete(key);
 
     // Generate JWT
@@ -244,17 +258,35 @@ exports.verifySignupOTP = async (req, res) => {
 };
 
 // POST /api/auth/resend-signup-otp
+// POST /api/auth/resend-signup-otp
 exports.resendSignupOTP = async (req, res) => {
   const { email } = req.body;
 
+  if (!email) {
+    return res.status(400).json({
+      success: false,
+      message: "Email is required.",
+    });
+  }
+
   try {
-    const key = email?.trim();
+    const key = email.trim().toLowerCase();
     const record = otpStore.get(key);
 
     if (!record) {
       return res.status(400).json({
         success: false,
         message: "No registration request found. Please start signup again.",
+      });
+    }
+
+    // ✅ Block if email exists with social login
+    const existingUser = await Player.findOne({ email: key });
+    if (existingUser && existingUser.authProviders.some((p) => p !== "local")) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "This email is registered with social login. Please use Google or Facebook login.",
       });
     }
 
@@ -287,13 +319,13 @@ exports.resendSignupOTP = async (req, res) => {
     // ✅ Generate new OTP
     const otp = generateOTP();
     record.otp = otp;
-    record.expiresAt = Date.now() + 5 * 60 * 1000;
+    record.expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
     record.attempts = 0;
-    record.resendCount += 1; // 🔥 TRACK RESENDS
+    record.resendCount += 1;
 
     otpStore.set(key, record);
 
-    // ✅ SEND EMAIL (ONLY IF NOT LOCKED)
+    // ✅ Send email
     await sendEmail({
       to: email,
       subject: "New OTP for Email Verification - Clumpcoder",
@@ -314,90 +346,60 @@ exports.resendSignupOTP = async (req, res) => {
       message: "New OTP sent to your email",
     });
   } catch (err) {
-    console.error(err);
-    return res
-      .status(500)
-      .json({ message: "Server error", error: err.message });
+    console.error("Resend OTP Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: err.message,
+    });
   }
 };
 
 // POST /api/auth/login
 exports.login = async (req, res) => {
   const { email, password } = req.body;
-
   try {
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Email and password are required.",
-      });
-    }
+    if (!email || !password)
+      return res
+        .status(400)
+        .json({ success: false, message: "Email and password are required." });
 
-    // 1️⃣ Find user
     const player = await Player.findOne({ email });
-    if (!player) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid credentials",
-      });
-    }
+    if (!player)
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid credentials" });
 
-    // ✅ NEW: Block Google users from password login
-    if (player.authProvider === "google") {
+    // Block if user never set local password
+    if (!player.authProviders.includes("local")) {
       return res.status(400).json({
         success: false,
         message:
-          "This account is registered with Google. Please use Google login.",
+          "This account is registered with social login. Please use Google or Facebook login.",
       });
     }
 
-    // 2️⃣ Password check
     const isMatch = await player.comparePassword(password);
-    if (!isMatch) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid credentials",
-      });
-    }
+    if (!isMatch)
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid credentials" });
 
-    // 🟢 MAKE USER ACTIVE ON SUCCESSFUL LOGIN
-    if (player.accountStatus?.state !== "active") {
-      player.accountStatus = {
-        ...player.accountStatus,
-        state: "active",
-        lastActiveAt: new Date(),
-      };
-      await player.save();
-    } else {
-      player.accountStatus.lastActiveAt = new Date();
-      await player.save();
-    }
+    // Update lastActiveAt
+    player.accountStatus = {
+      ...player.accountStatus,
+      state: "active",
+      lastActiveAt: new Date(),
+    };
+    await player.save();
 
-    // 3️⃣ Issue JWT
     const token = jwt.sign({ id: player._id }, process.env.JWT_SECRET, {
       expiresIn: "7d",
     });
-
-    // 4️⃣ Response
-    res.json({
-      success: true,
-      token,
-      player: {
-        id: player._id,
-        username: player.username,
-        email: player.email,
-        country: player.country,
-        dateOfBirth: player.dateOfBirth,
-        pr: player.pr,
-        gender: player.gender,
-      },
-    });
+    res.json({ success: true, token, player });
   } catch (err) {
     console.error(err);
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
@@ -454,7 +456,9 @@ exports.sendForgotPasswordOtp = async (req, res) => {
       });
     }
 
-    const user = await Player.findOne({ email: email.trim() });
+    const key = email.trim().toLowerCase();
+    const user = await Player.findOne({ email: key });
+
     if (!user) {
       return res.status(400).json({
         success: false,
@@ -462,20 +466,31 @@ exports.sendForgotPasswordOtp = async (req, res) => {
       });
     }
 
+    // ❌ Block password reset for social-only users
+    if (!user.authProviders.includes("local")) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "This account is registered with social login. Password reset is not allowed. Please use Google or Facebook login.",
+      });
+    }
+
+    // ✅ Generate OTP
     const otp = generateOTP();
     const expiresAt = Date.now() + 5 * 60 * 1000;
-    console.log("Forgot Password OTP:", otp);
 
-    passOtpStore.set(email.trim(), {
+    // Save OTP in memory store
+    passOtpStore.set(key, {
       otp,
       expiresAt,
       attempts: 0,
       lockedUntil: null,
-      verified: false, // Track if OTP has been verified
+      verified: false,
     });
 
+    // Send OTP email
     await sendEmail({
-      to: email,
+      to: key,
       subject: "OTP to Reset Password - Clumpcoder",
       text: `Your OTP code is ${otp}. It is valid for 5 minutes.`,
       html: `
@@ -491,11 +506,11 @@ exports.sendForgotPasswordOtp = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "OTP sent to your email",
-      email: email,
-      otp: otp, // Remove in production
+      email: key,
+      otp, // 🔥 Remove before production
     });
   } catch (err) {
-    console.log(err);
+    console.error("Forgot Password OTP Error:", err);
     res.status(500).json({
       success: false,
       message: "Server error",
@@ -509,7 +524,6 @@ exports.sendForgotPasswordOtp = async (req, res) => {
 exports.verifyForgotPasswordOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
-    console.log(req.body);
 
     if (!email || otp === undefined || otp === null) {
       return res.status(400).json({
@@ -518,7 +532,7 @@ exports.verifyForgotPasswordOtp = async (req, res) => {
       });
     }
 
-    const key = email.trim();
+    const key = email.trim().toLowerCase();
     const record = passOtpStore.get(key);
 
     if (!record) {
@@ -528,10 +542,21 @@ exports.verifyForgotPasswordOtp = async (req, res) => {
       });
     }
 
+    const user = await Player.findOne({ email: key });
+
+    // ❌ Block social-only users
+    if (!user || !user.authProviders.includes("local")) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "This account is registered with social login. Password reset is not allowed. Please use Google or Facebook login.",
+      });
+    }
+
     const MAX_ATTEMPTS = 4;
     const LOCK_DURATION_MS = 60 * 60 * 1000; // 1 hour
 
-    // Check if locked
+    // 🔒 Check if OTP attempts exceeded
     if (record.lockedUntil && Date.now() < record.lockedUntil) {
       const remainingMinutes = Math.ceil(
         (record.lockedUntil - Date.now()) / 60000,
@@ -544,7 +569,7 @@ exports.verifyForgotPasswordOtp = async (req, res) => {
       });
     }
 
-    // Check if OTP expired
+    // ⏳ Check OTP expiry
     if (Date.now() > record.expiresAt) {
       passOtpStore.delete(key);
       return res.status(400).json({
@@ -556,7 +581,7 @@ exports.verifyForgotPasswordOtp = async (req, res) => {
     const providedOtp = String(otp).trim();
     const expectedOtp = String(record.otp).trim();
 
-    // Check OTP
+    // ❌ Wrong OTP
     if (providedOtp !== expectedOtp) {
       record.attempts = (record.attempts || 0) + 1;
 
@@ -567,7 +592,7 @@ exports.verifyForgotPasswordOtp = async (req, res) => {
         return res.status(429).json({
           success: false,
           message:
-            "You have exceeded the number of attempts. Please try again after 1 Hour",
+            "You have exceeded the number of attempts. Please try again after 1 hour.",
         });
       }
 
@@ -580,7 +605,7 @@ exports.verifyForgotPasswordOtp = async (req, res) => {
       });
     }
 
-    // OTP is correct - mark as verified but DON'T delete yet
+    // ✅ Correct OTP: mark as verified
     record.verified = true;
     record.verifiedAt = Date.now();
     passOtpStore.set(key, record);
@@ -588,10 +613,10 @@ exports.verifyForgotPasswordOtp = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "OTP verified successfully. You can now reset your password.",
-      email: email,
+      email: key,
     });
   } catch (err) {
-    console.error(err);
+    console.error("Verify Forgot Password OTP Error:", err);
     return res.status(500).json({
       success: false,
       message: "Server error",
@@ -602,6 +627,7 @@ exports.verifyForgotPasswordOtp = async (req, res) => {
 
 // POST /api/auth/changePass
 // Change password (only works after OTP is verified)
+// POST /api/auth/change-password
 exports.changePassword = async (req, res) => {
   try {
     const { email, newPassword } = req.body;
@@ -620,10 +646,10 @@ exports.changePassword = async (req, res) => {
       });
     }
 
-    const key = email.trim();
+    const key = email.trim().toLowerCase();
     const record = passOtpStore.get(key);
 
-    // Check if OTP was verified
+    // ✅ Check if OTP was verified
     if (!record || !record.verified) {
       return res.status(403).json({
         success: false,
@@ -631,7 +657,7 @@ exports.changePassword = async (req, res) => {
       });
     }
 
-    // Check if verification is still valid (10 minutes after verification)
+    // ⏳ Check OTP verification validity (10 minutes)
     const verificationValidDuration = 10 * 60 * 1000; // 10 minutes
     if (Date.now() - record.verifiedAt > verificationValidDuration) {
       passOtpStore.delete(key);
@@ -641,7 +667,7 @@ exports.changePassword = async (req, res) => {
       });
     }
 
-    const user = await Player.findOne({ email: email });
+    const user = await Player.findOne({ email: key });
     if (!user) {
       passOtpStore.delete(key);
       return res.status(404).json({
@@ -650,11 +676,26 @@ exports.changePassword = async (req, res) => {
       });
     }
 
-    // Update password
+    // ❌ Block social-only users
+    if (!user.authProviders.includes("local")) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "This account is registered with social login. Password change is not allowed. Please use Google or Facebook login.",
+      });
+    }
+
+    // ✅ Update password
     user.password = newPassword;
+
+    // Ensure 'local' is included in authProviders if it was missing (hybrid accounts)
+    if (!user.authProviders.includes("local")) {
+      user.authProviders.push("local");
+    }
+
     await user.save();
 
-    // Clear the OTP record after successful password change
+    // Clear the OTP record after success
     passOtpStore.delete(key);
 
     res.status(200).json({
@@ -663,7 +704,7 @@ exports.changePassword = async (req, res) => {
         "Password updated successfully. You can now login with your new password.",
     });
   } catch (err) {
-    console.error(err);
+    console.error("Change Password Error:", err);
     res.status(500).json({
       success: false,
       message: "Server error",
@@ -685,7 +726,8 @@ exports.resendForgotPasswordOtp = async (req, res) => {
       });
     }
 
-    const record = passOtpStore.get(email?.trim());
+    const key = email.trim().toLowerCase();
+    const record = passOtpStore.get(key);
 
     if (!record) {
       return res.status(400).json({
@@ -694,7 +736,7 @@ exports.resendForgotPasswordOtp = async (req, res) => {
       });
     }
 
-    // Check if locked
+    // 🔒 Check if account is locked
     if (record.lockedUntil && Date.now() < record.lockedUntil) {
       const remainingTime = Math.ceil(
         (record.lockedUntil - Date.now()) / 60000,
@@ -705,18 +747,27 @@ exports.resendForgotPasswordOtp = async (req, res) => {
       });
     }
 
-    // Generate new OTP
-    const otp = generateOTP();
-    const expiresAt = Date.now() + 5 * 60 * 1000;
-    console.log("Resend Forgot Password OTP:", otp);
+    // 🔑 Ensure the user exists and has local login
+    const user = await Player.findOne({ email: key });
+    if (!user || !user.authProviders.includes("local")) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "This account is registered with social login only. Password reset is not allowed. Please use Google or Facebook login.",
+      });
+    }
 
+    // ✅ Generate new OTP
+    const otp = generateOTP();
     record.otp = otp;
-    record.expiresAt = expiresAt;
+    record.expiresAt = Date.now() + 5 * 60 * 1000;
     record.attempts = 0;
     record.verified = false;
 
+    passOtpStore.set(key, record);
+
     await sendEmail({
-      to: email,
+      to: key,
       subject: "New OTP for Password Reset - Clumpcoder",
       text: `Your new OTP code is ${otp}. It is valid for 5 minutes.`,
       html: `
@@ -733,7 +784,7 @@ exports.resendForgotPasswordOtp = async (req, res) => {
       message: "New OTP sent to your email",
     });
   } catch (err) {
-    console.error(err);
+    console.error("Resend Forgot Password OTP Error:", err);
     res.status(500).json({
       success: false,
       message: "Server error",
@@ -864,20 +915,15 @@ exports.updateUsername = async (req, res) => {
 exports.googleLogin = async (req, res) => {
   try {
     const { id_token } = req.body;
+    if (!id_token)
+      return res
+        .status(400)
+        .json({ success: false, message: "id_token is required" });
 
-    if (!id_token) {
-      return res.status(400).json({
-        success: false,
-        message: "id_token is required",
-      });
-    }
-
-    // ✅ Verify Google Token
     const ticket = await client.verifyIdToken({
       idToken: id_token,
       audience: process.env.GOOGLE_CLIENT_ID,
     });
-
     const payload = ticket.getPayload();
 
     const googleId = payload.sub;
@@ -886,13 +932,9 @@ exports.googleLogin = async (req, res) => {
     const lastName = payload.family_name || "";
     const profileImage = payload.picture || "";
 
-    // ==============================
-    // CHECK USER BY GOOGLE ID FIRST
-    // ==============================
+    // 1️⃣ Check by googleId first
     let user = await Player.findOne({ googleId });
-
     if (user) {
-      // ✅ Existing Google user → LOGIN
       return res.status(200).json({
         success: true,
         message: "Login successful",
@@ -903,17 +945,13 @@ exports.googleLogin = async (req, res) => {
       });
     }
 
-    // ==============================
-    // CHECK USER BY EMAIL (ACCOUNT LINKING)
-    // ==============================
+    // 2️⃣ Check by email to link Google
     user = await Player.findOne({ email });
-
     if (user) {
-      // ⚠️ Existing LOCAL user → LINK GOOGLE
       user.googleId = googleId;
-      user.authProvider = "google";
+      if (!user.authProviders.includes("google"))
+        user.authProviders.push("google");
 
-      // Optional: update profile data
       if (!user.firstName) user.firstName = firstName;
       if (!user.lastName) user.lastName = lastName;
       if (!user.profileImage) user.profileImage = profileImage;
@@ -930,16 +968,13 @@ exports.googleLogin = async (req, res) => {
       });
     }
 
-    // ==============================
-    // CREATE NEW USER
-    // ==============================
+    // 3️⃣ Create new user
     const randomSuffix = Math.floor(Math.random() * 10000);
-
     const newUser = await Player.create({
       username: `${firstName || "user"}_${randomSuffix}`,
       email,
       googleId,
-      authProvider: "google",
+      authProviders: ["google"],
       firstName,
       lastName,
       profileImage,
@@ -955,9 +990,126 @@ exports.googleLogin = async (req, res) => {
     });
   } catch (error) {
     console.error("Google login error:", error);
+    return res
+      .status(401)
+      .json({ success: false, message: "Invalid Google token" });
+  }
+};
+
+// =========================== FACEBOOK LOGIN ===========================
+// POST /api/auth/facebook-login
+exports.facebookLogin = async (req, res) => {
+  try {
+    const { accessToken } = req.body;
+    if (!accessToken)
+      return res
+        .status(400)
+        .json({ success: false, message: "accessToken is required" });
+
+    // 🔥 For testing without real Facebook token, uncomment below:
+    // const fbData = {
+    //   id: "test_fb_123",
+    //   email: "test@example.com",
+    //   first_name: "Test",
+    //   last_name: "User",
+    //   picture: {
+    //     data: {
+    //       url: "https://dummyimage.com/100x100/000/fff",
+    //     },
+    //   },
+    // };
+    // console.log("Using FAKE Facebook data");
+
+    const fbResponse = await axios.get("https://graph.facebook.com/me", {
+      params: {
+        fields: "id,name,email,first_name,last_name,picture",
+        access_token: accessToken,
+      },
+    });
+
+    const fbData = fbResponse.data;
+    const facebookId = fbData.id;
+    const email = fbData.email;
+    const firstName = fbData.first_name || "";
+    const lastName = fbData.last_name || "";
+    const profileImage = fbData.picture?.data?.url || "";
+
+    // 1️⃣ Check by facebookId
+    let user = await Player.findOne({ facebookId });
+    if (user) {
+      return res.status(200).json({
+        success: true,
+        message: "Login successful",
+        token: jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+          expiresIn: "7d",
+        }),
+        user,
+      });
+    }
+
+    // 2️⃣ Check by email to link Facebook
+    if (email) {
+      user = await Player.findOne({ email });
+      if (user) {
+        user.facebookId = facebookId;
+        if (!user.authProviders.includes("facebook"))
+          user.authProviders.push("facebook");
+
+        if (!user.firstName) user.firstName = firstName;
+        if (!user.lastName) user.lastName = lastName;
+        if (!user.profileImage) user.profileImage = profileImage;
+
+        await user.save();
+
+        return res.status(200).json({
+          success: true,
+          message: "Facebook account linked & login successful",
+          token: jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+            expiresIn: "7d",
+          }),
+          user,
+        });
+      }
+    }
+
+    // 3️⃣ Create new user
+    const randomSuffix = Math.floor(Math.random() * 10000);
+    const newUser = await Player.create({
+      username: `${firstName || "user"}_${randomSuffix}`,
+      email: email || `fb_${facebookId}@noemail.com`,
+      facebookId,
+      authProviders: ["facebook"],
+      firstName,
+      lastName,
+      profileImage,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "User created via Facebook login",
+      token: jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, {
+        expiresIn: "7d",
+      }),
+      user: newUser,
+    });
+  } catch (error) {
+    // Enhanced logging
+    if (error.response?.data) {
+      console.error(
+        "Facebook API response error:",
+        JSON.stringify(error.response.data, null, 2),
+      );
+    } else if (
+      error.name === "MongoError" ||
+      error.name === "ValidationError"
+    ) {
+      console.error("Database error:", error);
+    } else {
+      console.error("Unexpected error in Facebook login:", error);
+    }
     return res.status(401).json({
       success: false,
-      message: "Invalid Google token",
+      message: "Invalid Facebook token or login failed",
     });
   }
 };

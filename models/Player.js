@@ -26,20 +26,21 @@ const playerSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
+
     // ✅ Password only required for LOCAL users
     password: {
       type: String,
       minlength: 6,
       required: function () {
-        return this.authProvider === "local";
+        return !this.authProviders || this.authProviders.includes("local");
       },
     },
 
-    // ✅ NEW: Auth Provider
-    authProvider: {
-      type: String,
-      enum: ["local", "google"],
-      default: "local",
+    // ✅ Multi-auth support
+    authProviders: {
+      type: [String],
+      enum: ["local", "google", "facebook"],
+      default: ["local"],
     },
 
     // ✅ NEW: Google ID
@@ -48,6 +49,14 @@ const playerSchema = new mongoose.Schema(
       unique: true,
       sparse: true, // allows multiple null values
     },
+
+    // ✅ ADD THIS
+    facebookId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
+
     gender: {
       type: String,
       enum: ["male", "female", "other"],
