@@ -42,6 +42,8 @@ router.put(
 
 //Get information
 router.get("/allUser", authController.allUserList);
+router.get("/getUser", auth, authController.getUser);
+router.get("/getUserById", auth, authController.getUserById);
 
 router.patch("/save-fcmToken", auth, authController.saveFcmToken);
 module.exports = router;
