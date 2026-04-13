@@ -1,6 +1,8 @@
+// controller/practiceMatchController.js
 const Player = require("../models/Player");
+const badgeService = require("../services/BadgeService");
 
-// Practice session logic (unchanged but with better error handling)
+// Practice session logic (unchanged)
 function calculatePracticePoints({
   correctCount,
   skippedCount,
@@ -14,7 +16,7 @@ function calculatePracticePoints({
 
 /**
  * POST /api/practice/end
- * Body: { playerId, difficulty, correctCount, incorrectCount, skippedCount }
+ * Body: { difficulty, correctCount, incorrectCount, skippedCount }
  */
 exports.endPracticeSession = async (req, res) => {
   const { difficulty, correctCount, incorrectCount, skippedCount } = req.body;
@@ -22,10 +24,18 @@ exports.endPracticeSession = async (req, res) => {
   const playerId = req.user._id;
   console.log(playerId);
 
+  // Accept both full names ("easy","medium","hard") and short codes ("E2","M4","H2" etc.)
+  const DIFF_MAP = {
+    easy: "easy", medium: "medium", hard: "hard",
+    e2: "easy", e4: "easy",
+    m2: "medium", m4: "medium",
+    h2: "hard", h4: "hard",
+  };
+  const normalizedDiff = DIFF_MAP[(difficulty || "").toLowerCase()];
+
   const total = correctCount + incorrectCount + skippedCount;
 
-
-  if (!playerId || !["easy", "medium", "hard"].includes(difficulty)) {
+  if (!playerId || !normalizedDiff) {
     return res.status(400).json({ message: "Missing or invalid fields" });
   }
 
@@ -45,16 +55,36 @@ exports.endPracticeSession = async (req, res) => {
     if (!player.pr) player.pr = { practice: {}, pvp: {} };
     if (!player.pr.practice) player.pr.practice = {};
 
+    // ✅ Increment stats.practice[normalizedDiff].gamesPlayed for badge tracking
+    if (!player.stats.practice[normalizedDiff]) {
+      player.stats.practice[normalizedDiff] = {
+        gamesPlayed: 0,
+        highScore: 0,
+        totalScore: 0,
+        averageScore: 0,
+      };
+    }
+    player.stats.practice[normalizedDiff].gamesPlayed += 1;
+    player.stats.overall.totalGames += 1;
+    player.markModified("stats");
+
     const points = calculatePracticePoints({
       correctCount,
       skippedCount,
       incorrectCount,
     });
-    const currentRating = player.pr.practice[difficulty];
+    const currentRating = player.pr.practice[normalizedDiff];
     const newRating = currentRating + points;
 
-    player.pr.practice[difficulty] = newRating;
+    player.pr.practice[normalizedDiff] = newRating;
     await player.save();
+
+    // ✅ Badge checks — non-blocking
+    badgeService.onPracticeGameCompleted(playerId.toString()).then((earned) => {
+      if (earned.length > 0) {
+        console.log(`🏅 Practice badges earned for ${playerId}: ${earned.map(b => b.title).join(", ")}`);
+      }
+    }).catch(() => {});
 
     return res.json({
       message: "Practice session ended",

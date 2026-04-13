@@ -1,4 +1,4 @@
-// controller/pvpController.js
+// handlers/socketHandler.js
 const {
   RedisMatchmakingService,
 } = require("../services/RedisMatchmakingService");
@@ -499,7 +499,7 @@ module.exports = function registerSocketHandlers(io, app) {
         }
       } catch (error) {
         console.error("❌ game-ended error:", error);
-      }
+       }
     });
 
     /* ========================================

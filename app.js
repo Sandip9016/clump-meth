@@ -7,6 +7,7 @@ require("dotenv").config();
 
 // routes
 const authRoutes = require("./routes/auth");
+const badgeRoutes = require("./routes/badge");
 const questionRoutes = require("./routes/question");
 const matchRoutes = require("./routes/match");
 const practiceMatchRoutes = require("./routes/practicematch");
@@ -36,6 +37,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // routes
 app.use("/api/auth", authRoutes);
+app.use("/api/badges", badgeRoutes);
 app.use("/api/question", questionRoutes);
 app.use("/api/practice", practiceMatchRoutes);
 app.use("/api/friend", friendRoutes);
@@ -56,9 +58,12 @@ app.get("/health", (req, res) => {
 // 🔹 CONNECT MONGOOSE (separate)
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => {
+  .then(async () => {
     console.log("MongoDB connected");
     notificationScheduler.init();
+    // ✅ Seed badge definitions into DB
+    const { seedBadges } = require("./config/seedBadges");
+    await seedBadges();
   })
   .catch((err) => {
     console.error("MongoDB connection error:", err);

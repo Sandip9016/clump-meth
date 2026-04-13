@@ -181,6 +181,13 @@ const playerSchema = new mongoose.Schema(
       },
     },
 
+    // ✅ Badge system tracking (streak + loyalty)
+    badgeTracking: {
+      lastOpenedDate: { type: String, default: null }, // "YYYY-MM-DD"
+      currentStreak: { type: Number, default: 0 },
+      appOpenCount: { type: Number, default: 0 },
+    },
+
     fcmToken: {
       type: String,
       required: false,

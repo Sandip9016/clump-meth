@@ -1,6 +1,7 @@
+// controller/profileController.js
 const Player = require("../models/Player");
 const { uploadToS3, deleteFromS3 } = require("../config/s3Config");
-
+const badgeService = require("../services/BadgeService");
 
 const getS3KeyFromUrl = (url) => {
   if (!url) return null;
@@ -11,7 +12,7 @@ const getS3KeyFromUrl = (url) => {
 exports.updateProfile = async (req, res) => {
   try {
     const { _id } = req.user;
-    const { dateOfBirth, gender,firstName,lastName ,country } = req.body;
+    const { dateOfBirth, gender, firstName, lastName, country } = req.body;
 
     const user = await Player.findById(_id);
     if (!user) {
@@ -21,27 +22,20 @@ exports.updateProfile = async (req, res) => {
       });
     }
 
-
     /* ---------- Handle profile image ---------- */
     let profileImage = user.profileImage;
 
     if (req.file) {
-      // Upload new image to S3
       const key = `profiles/${Date.now()}-${req.file.originalname}`;
-
       const { Location } = await uploadToS3(
         req.file.buffer,
         key,
         req.file.mimetype
       );
 
-      // Delete old image AFTER successful upload
       if (user.profileImage) {
         const oldKey = getS3KeyFromUrl(user.profileImage);
-
-        if (oldKey) {
-          await deleteFromS3(oldKey);
-        }
+        if (oldKey) await deleteFromS3(oldKey);
       }
 
       profileImage = Location;
@@ -60,6 +54,13 @@ exports.updateProfile = async (req, res) => {
       },
       { new: true, runValidators: true }
     ).select("-password");
+
+    // ✅ Badge checks — non-blocking, run after DB is updated
+    badgeService.onProfileUpdated(_id.toString()).then((earned) => {
+      if (earned.length > 0) {
+        console.log(`🏅 Profile badges earned for ${_id}: ${earned.map(b => b.title).join(", ")}`);
+      }
+    }).catch(() => {});
 
     res.status(200).json({
       success: true,

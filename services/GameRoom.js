@@ -1,5 +1,6 @@
 const Player = require("../models/Player");
 const PVPGame = require("../models/PVPGame");
+const badgeService = require("./BadgeService");
 
 /* ================================
    DATABASE HELPERS (PLAYER ID)
@@ -111,10 +112,15 @@ class GameRoom {
     );
 
     this.questionMeterController = null;
-    this.difficulty =
-      players[0].rating > players[1].rating ? players[1].diff : players[0].diff;
 
-    this.symbols = ["sum", "difference", "product", "quotient"];
+    // Parse diff code (e.g. "M2", "E4", "H2") into difficulty + symbols
+    const rawDiff =
+      players[0].rating > players[1].rating ? players[1].diff : players[0].diff;
+    const parsed = GameRoom.parseDiffCode(rawDiff);
+    this.diffCode = rawDiff;           // original code e.g. "M2"
+    this.difficulty = parsed.difficulty; // "easy" | "medium" | "hard"
+    this.level = parsed.level;          // numeric level e.g. 2 or 4
+    this.symbols = parsed.symbols;      // filtered symbol list
 
     this.gameSettings = {
       questionsPerGame: 10,
@@ -155,6 +161,32 @@ class GameRoom {
         questionsAnswered: 0,
       });
     });
+  }
+
+  /**
+   * Parse a diff code like "M2", "E4", "H2" into difficulty, level, and symbols.
+   * Format: <D><N> where D = E|M|H and N = 2|4
+   *   2 symbols → sum, difference
+   *   4 symbols → sum, difference, product, quotient
+   */
+  static parseDiffCode(diff) {
+    const ALL_SYMBOLS = ["sum", "difference", "product", "quotient"];
+    const TWO_SYMBOLS = ["sum", "difference"];
+
+    if (!diff || typeof diff !== "string") {
+      return { difficulty: "medium", level: 2, symbols: TWO_SYMBOLS };
+    }
+
+    const upper = diff.toUpperCase();
+    const diffMap = { E: "easy", M: "medium", H: "hard" };
+    const diffChar = upper[0];
+    const levelNum = parseInt(upper[1], 10);
+
+    const difficulty = diffMap[diffChar] || "medium";
+    const level = isNaN(levelNum) ? 2 : levelNum;
+    const symbols = level >= 4 ? ALL_SYMBOLS : TWO_SYMBOLS;
+
+    return { difficulty, level, symbols };
   }
 
   bindIO(io) {
@@ -359,6 +391,23 @@ class GameRoom {
     await this.saveGameToDatabase(gameResults);
     this.markPlayersAsNotInGame();
 
+    // ✅ Update PvP stats so badge counters are accurate (non-blocking)
+    for (const playerResult of gameResults.players) {
+      const won = playerResult.playerId === remainingPlayer.id;
+      Player.findById(playerResult.playerId).then((p) => {
+        if (p) return p.updatePvPStats(this.difficulty, won);
+      }).catch(() => {});
+    }
+
+    // ✅ Badge system: both players complete a PvP match on disconnect (non-blocking)
+    for (const player of this.players) {
+      badgeService.onPvPGameCompleted(player.id).then((earned) => {
+        if (earned.length > 0 && this.io && player.socketId) {
+          this.io.to(player.socketId).emit("badges-earned", { badges: earned });
+        }
+      }).catch(() => {});
+    }
+
     if (this.io && remainingPlayer.socketId) {
       this.io.to(remainingPlayer.socketId).emit("grace-period-expired", {
         message: "Your opponent did not reconnect within 15 seconds. You win!",
@@ -476,6 +525,13 @@ class GameRoom {
     });
 
     console.log(`😊 ${player.username} sent ${emoji} to ${opponent.username}`);
+
+    // ✅ Badge system: reaction badges (non-blocking)
+    badgeService.onReactionSent(player.id).then((earned) => {
+      if (earned.length > 0 && this.io && player.socketId) {
+        this.io.to(player.socketId).emit("badges-earned", { badges: earned });
+      }
+    }).catch(() => {});
 
     return { success: true, message: "Emoji sent!" };
   }
@@ -764,6 +820,23 @@ class GameRoom {
     const gameResults = await this.calculateGameResults();
     await this.saveGameToDatabase(gameResults);
 
+    // ✅ Update PvP stats so badge counters are accurate (non-blocking)
+    for (const playerResult of gameResults.players) {
+      const won = playerResult.won;
+      Player.findById(playerResult.playerId).then((p) => {
+        if (p) return p.updatePvPStats(this.difficulty, won);
+      }).catch(() => {});
+    }
+
+    // ✅ Badge system: award PvP completion badges (non-blocking)
+    for (const player of this.players) {
+      badgeService.onPvPGameCompleted(player.id).then((earned) => {
+        if (earned.length > 0 && this.io && player.socketId) {
+          this.io.to(player.socketId).emit("badges-earned", { badges: earned });
+        }
+      }).catch(() => {});
+    }
+
     // ✅ CRITICAL: Mark players as NOT in game
     this.markPlayersAsNotInGame();
 
@@ -831,6 +904,16 @@ class GameRoom {
     });
   }
 
+  async calculateDisconnectRatingChanges(playerResults, winnerId) {
+    const changes = [];
+    for (const p of playerResults) {
+      const delta = p.playerId === winnerId ? +5 : -5;
+      await updatePlayerRatingInDatabase(p.playerId, delta, this.difficulty);
+      changes.push(delta);
+    }
+    return changes;
+  }
+
   async calculateRatingChanges(playerResults, winner) {
     const changes = [];
 
@@ -892,7 +975,9 @@ class GameRoom {
       createdAt: this.createdAt,
       gameState: this.gameState,
       questionMeter: this.questionMeter,
-      difficulty: this.difficulty,
+      difficulty: this.difficulty,   // "easy" | "medium" | "hard"
+      level: this.diffCode,          // original diff code e.g. "M2"
+      symbols: this.symbols,         // e.g. ["sum","difference"]
     };
   }
 }

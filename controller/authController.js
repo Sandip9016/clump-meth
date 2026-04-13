@@ -3,6 +3,7 @@ const bcrypt = require("bcrypt");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 const Player = require("../models/Player");
+const badgeService = require("../services/BadgeService");
 const { sendEmail } = require("../middleware/mail");
 const otpStore = new Map();
 const passOtpStore = new Map();
@@ -392,6 +393,9 @@ exports.login = async (req, res) => {
       lastActiveAt: new Date(),
     };
     await player.save();
+
+    // ✅ Badge: streak + loyalty check on login
+    badgeService.onAppOpened(player._id.toString()).catch(() => {});
 
     const token = jwt.sign({ id: player._id }, process.env.JWT_SECRET, {
       expiresIn: "7d",
@@ -841,61 +845,6 @@ exports.saveFcmToken = async (req, res) => {
   }
 };
 
-// POST /api/auth/getuser
-
-exports.getUser = async (req, res) => {
-  const { _id } = req.user;
-  try {
-    const user = await Player.findById(_id);
-
-    return res.status(200).json({
-      success: true,
-      user,
-    });
-  } catch (error) {
-    console.error("Error fetching users:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
-  }
-};
-
-exports.getUserById = async (req, res) => {
-  try {
-    const { userId } = req.query; // ✅ use query for GET
-
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        message: "userId is required",
-      });
-    }
-
-    const user = await Player.findById(userId).select(
-      "-password -createdAt -updatedAt -__v",
-    );
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      user,
-    });
-  } catch (error) {
-    console.error("Error fetching user:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
-  }
-};
-
 //=========================== Update Username ============================
 // PUT /api/auth/update-username
 
@@ -990,6 +939,9 @@ exports.googleLogin = async (req, res) => {
     // 1️⃣ Check by googleId first
     let user = await Player.findOne({ googleId });
     if (user) {
+      // ✅ Badge: streak on returning google user
+      badgeService.onAppOpened(user._id.toString()).catch(() => {});
+
       return res.status(200).json({
         success: true,
         message: "Login successful",
@@ -1012,6 +964,10 @@ exports.googleLogin = async (req, res) => {
       if (!user.profileImage) user.profileImage = profileImage;
 
       await user.save();
+
+      // ✅ Badge: Google Linked
+      badgeService.onGoogleLinked(user._id.toString()).catch(() => {});
+      badgeService.onAppOpened(user._id.toString()).catch(() => {});
 
       return res.status(200).json({
         success: true,
@@ -1092,6 +1048,9 @@ exports.facebookLogin = async (req, res) => {
     // 1️⃣ Check by facebookId
     let user = await Player.findOne({ facebookId });
     if (user) {
+      // ✅ Badge: streak on returning facebook user
+      badgeService.onAppOpened(user._id.toString()).catch(() => {});
+
       return res.status(200).json({
         success: true,
         message: "Login successful",
@@ -1115,6 +1074,10 @@ exports.facebookLogin = async (req, res) => {
         if (!user.profileImage) user.profileImage = profileImage;
 
         await user.save();
+
+        // ✅ Badge: Facebook Linked + streak
+        badgeService.onFacebookLinked(user._id.toString()).catch(() => {});
+        badgeService.onAppOpened(user._id.toString()).catch(() => {});
 
         return res.status(200).json({
           success: true,

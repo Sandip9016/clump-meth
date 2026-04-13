@@ -1,5 +1,6 @@
 const Friend = require("../models/Friend");
 const Player = require("../models/Player");
+const badgeService = require("../services/BadgeService");
 const admin = require("../config/firebase");
 const { memoryStorage } = require("multer");
 const axios = require("axios");
@@ -158,6 +159,10 @@ exports.acceptFrndRequest = async (req, res) => {
     }
 
     console.log("response", response);
+
+    // ✅ Badge: Friendly Connection — award to both sides
+    badgeService.onFriendAdded(requester.toString()).catch(() => {});
+    badgeService.onFriendAdded(recipient.toString()).catch(() => {});
 
     return res.status(201).json({
       success: true,
