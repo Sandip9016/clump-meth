@@ -818,6 +818,61 @@ exports.allUserList = async (req, res) => {
   }
 };
 
+// POST /api/auth/getuser
+
+exports.getUser = async (req, res) => {
+  const { _id } = req.user;
+  try {
+    const user = await Player.findById(_id);
+
+    return res.status(200).json({
+      success: true,
+      user,
+    });
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+exports.getUserById = async (req, res) => {
+  try {
+    const { userId } = req.query; // ✅ use query for GET
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "userId is required",
+      });
+    }
+
+    const user = await Player.findById(userId).select(
+      "-password -createdAt -updatedAt -__v",
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      user,
+    });
+  } catch (error) {
+    console.error("Error fetching user:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
 // POST /api/auth/save-fcmToken
 exports.saveFcmToken = async (req, res) => {
   try {
