@@ -117,10 +117,10 @@ class GameRoom {
     const rawDiff =
       players[0].rating > players[1].rating ? players[1].diff : players[0].diff;
     const parsed = GameRoom.parseDiffCode(rawDiff);
-    this.diffCode = rawDiff;           // original code e.g. "M2"
+    this.diffCode = rawDiff; // original code e.g. "M2"
     this.difficulty = parsed.difficulty; // "easy" | "medium" | "hard"
-    this.level = parsed.level;          // numeric level e.g. 2 or 4
-    this.symbols = parsed.symbols;      // filtered symbol list
+    this.level = parsed.level; // numeric level e.g. 2 or 4
+    this.symbols = parsed.symbols; // filtered symbol list
 
     this.gameSettings = {
       questionsPerGame: 10,
@@ -394,18 +394,17 @@ class GameRoom {
     // ✅ Update PvP stats so badge counters are accurate (non-blocking)
     for (const playerResult of gameResults.players) {
       const won = playerResult.playerId === remainingPlayer.id;
-      Player.findById(playerResult.playerId).then((p) => {
-        if (p) return p.updatePvPStats(this.difficulty, won);
-      }).catch(() => {});
+      Player.findById(playerResult.playerId)
+        .then((p) => {
+          if (p) return p.updatePvPStats(this.difficulty, won);
+        })
+        .catch(() => {});
     }
 
     // ✅ Badge system: both players complete a PvP match on disconnect (non-blocking)
+    // Badges are sent via dedicated BadgeSocket, not PVP socket
     for (const player of this.players) {
-      badgeService.onPvPGameCompleted(player.id).then((earned) => {
-        if (earned.length > 0 && this.io && player.socketId) {
-          this.io.to(player.socketId).emit("badges-earned", { badges: earned });
-        }
-      }).catch(() => {});
+      badgeService.onPvPGameCompleted(player.id).catch(() => {});
     }
 
     if (this.io && remainingPlayer.socketId) {
@@ -527,11 +526,8 @@ class GameRoom {
     console.log(`😊 ${player.username} sent ${emoji} to ${opponent.username}`);
 
     // ✅ Badge system: reaction badges (non-blocking)
-    badgeService.onReactionSent(player.id).then((earned) => {
-      if (earned.length > 0 && this.io && player.socketId) {
-        this.io.to(player.socketId).emit("badges-earned", { badges: earned });
-      }
-    }).catch(() => {});
+    // Badges are sent via dedicated BadgeSocket, not PVP socket
+    badgeService.onReactionSent(player.id).catch(() => {});
 
     return { success: true, message: "Emoji sent!" };
   }
@@ -782,14 +778,14 @@ class GameRoom {
     } else {
       ps.streak = 0;
     }
-    
+
     // Return result for controller
     return {
       isCorrect,
       score: ps.score,
       streak: ps.streak,
       correctAnswers: ps.correctAnswers,
-      history: this.getPlayerHistory(playerId)
+      history: this.getPlayerHistory(playerId),
     };
   }
 
@@ -797,14 +793,14 @@ class GameRoom {
   getPlayerHistory(playerId) {
     const history = [];
     const currentIdx = this.playerProgress.get(playerId);
-    
+
     for (let i = 0; i < currentIdx; i++) {
-        const answers = this.playerAnswers.get(`${i}`);
-        if (answers && answers.has(playerId)) {
-            history.push(answers.get(playerId).isCorrect);
-        }
+      const answers = this.playerAnswers.get(`${i}`);
+      if (answers && answers.has(playerId)) {
+        history.push(answers.get(playerId).isCorrect);
+      }
     }
-    return history.slice(-8); 
+    return history.slice(-8);
   }
 
   async endGame() {
@@ -823,18 +819,17 @@ class GameRoom {
     // ✅ Update PvP stats so badge counters are accurate (non-blocking)
     for (const playerResult of gameResults.players) {
       const won = playerResult.won;
-      Player.findById(playerResult.playerId).then((p) => {
-        if (p) return p.updatePvPStats(this.difficulty, won);
-      }).catch(() => {});
+      Player.findById(playerResult.playerId)
+        .then((p) => {
+          if (p) return p.updatePvPStats(this.difficulty, won);
+        })
+        .catch(() => {});
     }
 
     // ✅ Badge system: award PvP completion badges (non-blocking)
+    // Badges are sent via dedicated BadgeSocket, not PVP socket
     for (const player of this.players) {
-      badgeService.onPvPGameCompleted(player.id).then((earned) => {
-        if (earned.length > 0 && this.io && player.socketId) {
-          this.io.to(player.socketId).emit("badges-earned", { badges: earned });
-        }
-      }).catch(() => {});
+      badgeService.onPvPGameCompleted(player.id).catch(() => {});
     }
 
     // ✅ CRITICAL: Mark players as NOT in game
@@ -975,9 +970,9 @@ class GameRoom {
       createdAt: this.createdAt,
       gameState: this.gameState,
       questionMeter: this.questionMeter,
-      difficulty: this.difficulty,   // "easy" | "medium" | "hard"
-      level: this.diffCode,          // original diff code e.g. "M2"
-      symbols: this.symbols,         // e.g. ["sum","difference"]
+      difficulty: this.difficulty, // "easy" | "medium" | "hard"
+      level: this.diffCode, // original diff code e.g. "M2"
+      symbols: this.symbols, // e.g. ["sum","difference"]
     };
   }
 }

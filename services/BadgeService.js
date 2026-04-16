@@ -17,6 +17,21 @@ const PlayerBadge = require("../models/PlayerBadge");
 const Player = require("../models/Player");
 
 class BadgeService {
+  constructor() {
+    this.badgeSocket = null; // Set by app.js after initialization
+  }
+
+  /**
+   * Set the badge socket interface for real-time delivery.
+   * Called from app.js during initialization.
+   *
+   * @param {object} badgeSocket - { emitBadgeEarned, getPlayerSocketId, getConnectedPlayers }
+   */
+  setBadgeSocket(badgeSocket) {
+    this.badgeSocket = badgeSocket;
+    console.log("✅ BadgeService socket interface registered");
+  }
+
   // ─────────────────────────────────────────────
   // INTERNAL HELPERS
   // ─────────────────────────────────────────────
@@ -30,6 +45,20 @@ class BadgeService {
   }
 
   /**
+   * Internal method: Emit badge earned via socket if available
+   */
+  _emitBadgeEarned(playerId, badgeInfo) {
+    try {
+      if (this.badgeSocket) {
+        this.badgeSocket.emitBadgeEarned(playerId, badgeInfo);
+      }
+    } catch (err) {
+      console.error("❌ Error emitting badge via socket:", err);
+      // Don't throw — socket emission failure shouldn't break badge earning
+    }
+  }
+
+  /**
    * Get or create a PlayerBadge progress record for (playerId, badge._id).
    * Returns { playerBadge, isNew }.
    */
@@ -37,8 +66,14 @@ class BadgeService {
     // Use findOneAndUpdate with upsert to avoid race-condition duplicate key errors
     const pb = await PlayerBadge.findOneAndUpdate(
       { player: playerId, badgeId: badge.badgeId },
-      { $setOnInsert: { player: playerId, badge: badge._id, badgeId: badge.badgeId } },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      {
+        $setOnInsert: {
+          player: playerId,
+          badge: badge._id,
+          badgeId: badge.badgeId,
+        },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
     );
     return { playerBadge: pb, isNew: false };
   }
@@ -46,6 +81,7 @@ class BadgeService {
   /**
    * Mark a badge as earned (if not already earned).
    * Returns the badge title if newly earned, null otherwise.
+   * Also emits real-time socket notification.
    */
   async _award(playerId, badgeId) {
     const badge = await this._getBadge(badgeId);
@@ -57,10 +93,12 @@ class BadgeService {
 
     playerBadge.isEarned = true;
     playerBadge.earnedAt = new Date();
+    playerBadge.notified = false; // Mark for offline delivery
     await playerBadge.save();
 
     console.log(`🏅 Badge earned: [${badge.title}] by player ${playerId}`);
-    return {
+
+    const badgeInfo = {
       badgeId: badge.badgeId,
       title: badge.title,
       description: badge.description,
@@ -69,12 +107,18 @@ class BadgeService {
       iconUrl: badge.iconUrl || null,
       earnedAt: playerBadge.earnedAt,
     };
+
+    // ✅ Emit real-time socket notification
+    this._emitBadgeEarned(playerId, badgeInfo);
+
+    return badgeInfo;
   }
 
   /**
    * Increment the progress counter for a progress-based badge.
    * Automatically awards the badge when currentCount >= targetCount.
    * Returns the badge title if newly earned, null otherwise.
+   * Also emits real-time socket notification.
    */
   async _incrementProgress(playerId, badgeId) {
     const badge = await this._getBadge(badgeId);
@@ -89,25 +133,37 @@ class BadgeService {
     if (badge.targetCount && playerBadge.currentCount >= badge.targetCount) {
       playerBadge.isEarned = true;
       playerBadge.earnedAt = new Date();
+      playerBadge.notified = false; // Mark for offline delivery
       console.log(`🏅 Badge earned: [${badge.title}] by player ${playerId}`);
     }
 
     await playerBadge.save();
-    return playerBadge.isEarned ? {
-      badgeId: badge.badgeId,
-      title: badge.title,
-      description: badge.description,
-      category: badge.category,
-      iconName: badge.iconName,
-      iconUrl: badge.iconUrl || null,
-      earnedAt: playerBadge.earnedAt,
-    } : null;
+
+    if (playerBadge.isEarned) {
+      const badgeInfo = {
+        badgeId: badge.badgeId,
+        title: badge.title,
+        description: badge.description,
+        category: badge.category,
+        iconName: badge.iconName,
+        iconUrl: badge.iconUrl || null,
+        earnedAt: playerBadge.earnedAt,
+      };
+
+      // ✅ Emit real-time socket notification
+      this._emitBadgeEarned(playerId, badgeInfo);
+
+      return badgeInfo;
+    }
+
+    return null;
   }
 
   /**
    * Sync a progress counter to an exact value (used when we read
    * stats directly from Player doc instead of counting events).
    * Returns the badge title if newly earned, null otherwise.
+   * Also emits real-time socket notification.
    */
   async _syncProgress(playerId, badgeId, currentCount) {
     const badge = await this._getBadge(badgeId);
@@ -122,19 +178,30 @@ class BadgeService {
     if (badge.targetCount && playerBadge.currentCount >= badge.targetCount) {
       playerBadge.isEarned = true;
       playerBadge.earnedAt = new Date();
+      playerBadge.notified = false; // Mark for offline delivery
       console.log(`🏅 Badge earned: [${badge.title}] by player ${playerId}`);
     }
 
     await playerBadge.save();
-    return playerBadge.isEarned ? {
-      badgeId: badge.badgeId,
-      title: badge.title,
-      description: badge.description,
-      category: badge.category,
-      iconName: badge.iconName,
-      iconUrl: badge.iconUrl || null,
-      earnedAt: playerBadge.earnedAt,
-    } : null;
+
+    if (playerBadge.isEarned) {
+      const badgeInfo = {
+        badgeId: badge.badgeId,
+        title: badge.title,
+        description: badge.description,
+        category: badge.category,
+        iconName: badge.iconName,
+        iconUrl: badge.iconUrl || null,
+        earnedAt: playerBadge.earnedAt,
+      };
+
+      // ✅ Emit real-time socket notification
+      this._emitBadgeEarned(playerId, badgeInfo);
+
+      return badgeInfo;
+    }
+
+    return null;
   }
 
   // ─────────────────────────────────────────────
@@ -175,7 +242,11 @@ class BadgeService {
 
       // Overall match badges (badgeIds 12, 13)
       for (const badgeId of [12, 13]) {
-        const badgeInfo = await this._syncProgress(playerId, badgeId, overallTotal);
+        const badgeInfo = await this._syncProgress(
+          playerId,
+          badgeId,
+          overallTotal,
+        );
         if (badgeInfo) earned.push(badgeInfo);
       }
     } catch (err) {
@@ -216,7 +287,11 @@ class BadgeService {
 
       // Overall match badges (badgeIds 12, 13)
       for (const badgeId of [12, 13]) {
-        const badgeInfo = await this._syncProgress(playerId, badgeId, overallTotal);
+        const badgeInfo = await this._syncProgress(
+          playerId,
+          badgeId,
+          overallTotal,
+        );
         if (badgeInfo) earned.push(badgeInfo);
       }
     } catch (err) {
@@ -587,17 +662,14 @@ class BadgeService {
         isEarned: pb?.isEarned || false,
         earnedAt: pb?.earnedAt || null,
         currentCount: pb?.currentCount || 0,
-        progress:
-          badge.targetCount
-            ? Math.min(
-                100,
-                Math.floor(
-                  ((pb?.currentCount || 0) / badge.targetCount) * 100,
-                ),
-              )
-            : pb?.isEarned
-              ? 100
-              : 0,
+        progress: badge.targetCount
+          ? Math.min(
+              100,
+              Math.floor(((pb?.currentCount || 0) / badge.targetCount) * 100),
+            )
+          : pb?.isEarned
+            ? 100
+            : 0,
       };
     });
   }

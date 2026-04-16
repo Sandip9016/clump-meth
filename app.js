@@ -16,6 +16,10 @@ const adminRoutes = require("./routes/admin");
 const notificationRoutes = require("./routes/notification");
 const notificationScheduler = require("./cronJobs/notification");
 
+// ✅ Import badge socket handler and badge service
+const registerBadgeSocket = require("./controller/BadgeSocket");
+const badgeService = require("./services/BadgeService");
+
 const app = express();
 const server = http.createServer(app);
 
@@ -29,6 +33,10 @@ const io = new Server(server, {
 });
 
 app.set("io", io);
+
+// ✅ Initialize badge socket handler and connect to BadgeService
+const badgeSocket = registerBadgeSocket(io);
+badgeService.setBadgeSocket(badgeSocket);
 
 // middlewares
 app.use(cors());
