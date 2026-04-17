@@ -3,6 +3,8 @@ const bcrypt = require("bcrypt");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 const Player = require("../models/Player");
+const PlayerBadge = require("../models/PlayerBadge");
+const Friendship = require("../models/Friend");
 const badgeService = require("../services/BadgeService");
 const { sendEmail } = require("../middleware/mail");
 const otpStore = new Map();
@@ -433,11 +435,20 @@ exports.deleteUserByAdmin = async (req, res) => {
       }
     }
 
+    // Delete all earned badges for this user
+    await PlayerBadge.deleteMany({ player: userId });
+
+    // Delete all friendships involving this user (as requester or recipient)
+    await Friendship.deleteMany({
+      $or: [{ requester: userId }, { recipient: userId }],
+    });
+
+    // Delete the player
     await Player.findByIdAndDelete(userId);
 
     return res.status(200).json({
       success: true,
-      message: "User deleted successfully",
+      message: "User, badges, and friendships deleted successfully",
     });
   } catch (error) {
     console.error("Admin delete user error:", error);
