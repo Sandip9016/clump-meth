@@ -1,4 +1,21 @@
-const {  getQuestions } = require("../loadQuestion");
+const { getQuestions } = require("../loadQuestion");
+
+/**
+ * Map mathematical operators to database symbol names
+ * @param {string} symbol - Symbol or operator (e.g., "+", "-", "*", "/")
+ * @returns {string} - Mapped database symbol name
+ */
+function mapSymbolToDatabase(symbol) {
+  const operatorMap = {
+    "+": "Sum",
+    "-": "Difference",
+    "*": "Product",
+    "/": "Quotient",
+  };
+
+  const normalized = String(symbol).trim();
+  return operatorMap[normalized] || normalized;
+}
 
 /**
  * Determine the appropriate question level based on player rating and difficulty
@@ -90,15 +107,14 @@ exports.getQuestion = (req, res) => {
   const symbolList = rawSymbols
     ? String(rawSymbols)
         .split(",")
-        .map((s) => s.trim().toLowerCase())
+        .map((s) => s.trim())
         .filter((s) => s)
+        .map((s) => mapSymbolToDatabase(s)) // Map operators to database symbols
+        .map((s) => s.toLowerCase()) // Convert to lowercase for comparison
     : [];
 
   // Validation
-  if (
-    !["easy", "medium", "hard"].includes(diff) ||
-    !symbolList.length 
-  ) {
+  if (!["easy", "medium", "hard"].includes(diff) || !symbolList.length) {
     return res.status(400).json({
       message:
         "Provide difficulty=(easy|medium|hard), symbol (one or comma-separated), and optional qm (Question Meter)",
@@ -118,7 +134,7 @@ exports.getQuestion = (req, res) => {
     console.log(`Total questions loaded: ${allQs.length}`);
 
     // Determine the appropriate final level using QM or player rating
-    const targetFinalLevel = determineFinalQuestionLevel( diff, qm);
+    const targetFinalLevel = determineFinalQuestionLevel(diff, qm);
     if (qm == null) {
       const qmRanges = [
         { level: 1, start: 0, end: 5 },
@@ -137,7 +153,7 @@ exports.getQuestion = (req, res) => {
       qm = range ? range.start : 0;
     }
     console.log(
-      `Difficulty: ${diff}, QM: ${qm}, Target final level: ${targetFinalLevel}`
+      `Difficulty: ${diff}, QM: ${qm}, Target final level: ${targetFinalLevel}`,
     );
 
     // Filter by difficulty and final level
@@ -146,7 +162,7 @@ exports.getQuestion = (req, res) => {
     });
 
     console.log(
-      `Questions after difficulty & final level filter: ${pool.length}`
+      `Questions after difficulty & final level filter: ${pool.length}`,
     );
 
     // Further filter by symbol match
@@ -167,7 +183,7 @@ exports.getQuestion = (req, res) => {
     if (!pool.length) {
       return res.status(404).json({
         message: `No questions available matching difficulty "${diff}", final level ${targetFinalLevel}, and symbols [${symbolList.join(
-          ", "
+          ", ",
         )}]`,
         debug: {
           difficulty: diff,
@@ -285,7 +301,7 @@ exports.submitAnswer = (req, res) => {
   //   }
   // }
 
-  delta = correct ? 2 : -1
+  delta = correct ? 2 : -1;
 
   const nextQM = Math.max(0, qm + delta);
   let newCurrentScore = currentScore;
@@ -311,7 +327,7 @@ exports.submitAnswer = (req, res) => {
     const nextFinalLevel = determineFinalQuestionLevel(
       playerRating,
       question.difficulty,
-      nextQM
+      nextQM,
     );
 
     // Filter questions for next question
@@ -326,7 +342,7 @@ exports.submitAnswer = (req, res) => {
             .split(",")
             .map((s) => s.trim());
           return qSymbols.includes(sym);
-        })
+        }),
     );
 
     if (!nextPool.length) {
@@ -373,7 +389,7 @@ exports.submitAnswer = (req, res) => {
       updatedScore: newCurrentScore,
       scoreDelta: delta,
       nextQuestion: responseNextQuestion,
-      streak : newstreak,
+      streak: newstreak,
       debug: {
         nextPoolSize: nextPool.length,
         nextFinalLevel: nextFinalLevel,
