@@ -196,7 +196,7 @@ class GameRoom {
   startGame() {
     this.gameState = "active";
     this.gameTimer = setTimeout(
-      () => this.endGame(),
+      () => await this.endGame(),
       this.gameSettings.totalGameTime,
     );
     this.players.forEach((p) => this.emitNextQuestion(p.id));
@@ -819,17 +819,17 @@ class GameRoom {
     // ✅ Update PvP stats so badge counters are accurate (non-blocking)
     for (const playerResult of gameResults.players) {
       const won = playerResult.won;
-      Player.findById(playerResult.playerId)
-        .then((p) => {
-          if (p) return p.updatePvPStats(this.difficulty, won);
-        })
-        .catch(() => {});
+
+      const player = await Player.findById(playerResult.playerId);
+      if (player) {
+        await player.updatePvPStats(this.difficulty, won);
+      }
     }
 
     // ✅ Badge system: award PvP completion badges (non-blocking)
     // Badges are sent via dedicated BadgeSocket, not PVP socket
     for (const player of this.players) {
-      badgeService.onPvPGameCompleted(player.id).catch(() => {});
+      await badgeService.onPvPGameCompleted(player.id);
     }
 
     // ✅ CRITICAL: Mark players as NOT in game
