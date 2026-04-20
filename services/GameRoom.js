@@ -196,7 +196,7 @@ class GameRoom {
   startGame() {
     this.gameState = "active";
     this.gameTimer = setTimeout(
-      () => await this.endGame(),
+      async () => await this.endGame(),
       this.gameSettings.totalGameTime,
     );
     this.players.forEach((p) => this.emitNextQuestion(p.id));
