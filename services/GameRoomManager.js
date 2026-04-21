@@ -32,15 +32,19 @@ class GameRoomManager {
           // ✅ CHECK ROOM STATE: If it's a finished game (post-game lobby), clean it up
           const allowedStates = ["completed", "post-game", "lobby-expired"];
           if (allowedStates.includes(existingRoom.gameState)) {
-             console.log(`♻️ Cleaning up finished game room ${existingRoomId} (${existingRoom.gameState}) for new match.`);
-             this.removeGameRoom(existingRoomId);
-             // Verify cleanup
-             if (this.playerToRoom.has(p.id)) {
-                 this.playerToRoom.delete(p.id); // Force delete if removeGameRoom didn't get it
-             }
+            console.log(
+              `♻️ Cleaning up finished game room ${existingRoomId} (${existingRoom.gameState}) for new match.`,
+            );
+            this.removeGameRoom(existingRoomId);
+            // Verify cleanup
+            if (this.playerToRoom.has(p.id)) {
+              this.playerToRoom.delete(p.id); // Force delete if removeGameRoom didn't get it
+            }
           } else {
-             // Room is active - real duplicate
-             throw new Error(`Player already in a game: ${p.id} (${p.username})`);
+            // Room is active - real duplicate
+            throw new Error(
+              `Player already in a game: ${p.id} (${p.username})`,
+            );
           }
         }
       }
@@ -191,8 +195,8 @@ class GameRoomManager {
       if (gameAge > maxGameTime) {
         console.log(
           `🧹 Cleaning up stale game: ${roomId} (Age: ${Math.round(
-            gameAge / 1000
-          )}s)`
+            gameAge / 1000,
+          )}s)`,
         );
         this.forceEndGame(roomId, "stale");
       }
@@ -212,4 +216,3 @@ class GameRoomManager {
 }
 
 module.exports = { GameRoomManager };
-

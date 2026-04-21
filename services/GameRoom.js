@@ -196,7 +196,7 @@ class GameRoom {
   startGame() {
     this.gameState = "active";
     this.gameTimer = setTimeout(
-      () => this.endGame(),
+      async () => await this.endGame(),
       this.gameSettings.totalGameTime,
     );
     this.players.forEach((p) => this.emitNextQuestion(p.id));
@@ -401,7 +401,10 @@ class GameRoom {
           if (p) await p.updatePvPStats(this.difficulty, won);
           await badgeService.onPvPGameCompleted(playerResult.playerId);
         } catch (err) {
-          console.error(`⚠️  Post-game update failed for ${playerResult.playerId}:`, err.message);
+          console.error(
+            `⚠️  Post-game update failed for ${playerResult.playerId}:`,
+            err.message,
+          );
         }
       }),
     );
@@ -827,7 +830,10 @@ class GameRoom {
           await badgeService.onPvPGameCompleted(playerResult.playerId);
         } catch (err) {
           // Never let stats/badge errors break the game result delivery
-          console.error(`⚠️  Post-game update failed for ${playerResult.playerId}:`, err.message);
+          console.error(
+            `⚠️  Post-game update failed for ${playerResult.playerId}:`,
+            err.message,
+          );
         }
       }),
     );
