@@ -109,7 +109,7 @@ class QuestionService {
       const targetFinalLevel = this.determineFinalQuestionLevel(
         playerRating,
         difficulty,
-        qm
+        qm,
       );
 
       // Try symbol-specific cache first
@@ -132,12 +132,12 @@ class QuestionService {
       // Fallback to full load if cache empty
       if (pool.length === 0) {
         console.log(
-          `⚠️ No questions found for ${cacheKey}, falling back to full load`
+          `⚠️ No questions found for ${cacheKey}, falling back to full load`,
         );
         const allQs = getQuestions();
         pool = allQs.filter(
           (q) =>
-            q.difficulty === difficulty && q.finalLevel === targetFinalLevel
+            q.difficulty === difficulty && q.finalLevel === targetFinalLevel,
         );
       }
 
@@ -165,8 +165,8 @@ class QuestionService {
       if (pool.length === 0) {
         throw new Error(
           `No questions available for difficulty: ${difficulty}, level: ${targetFinalLevel}, symbols: ${JSON.stringify(
-            symbols
-          )}`
+            symbols,
+          )}`,
         );
       }
 
@@ -196,8 +196,8 @@ class QuestionService {
             ? 2
             : -1
           : isCorrect
-          ? 1
-          : -1;
+            ? 1
+            : -1;
       }
     }
 
@@ -226,7 +226,7 @@ class QuestionService {
           difficulty || "medium",
           defaultSymbols,
           1200,
-          null
+          null,
         );
         questions.push(question);
       } catch (error) {
@@ -241,6 +241,21 @@ class QuestionService {
     const correctAnswer = String(question.answer).trim();
     const userAnswer = String(givenAnswer).trim();
     return userAnswer === correctAnswer;
+  }
+
+  // ✅ NEW: Get all questions by difficulty (for Computer Mode)
+  getQuestionsForDifficulty(difficulty) {
+    try {
+      const allQuestions = getQuestions();
+      const filtered = allQuestions.filter((q) => q.difficulty === difficulty);
+      return filtered;
+    } catch (error) {
+      console.error(
+        `Error getting questions for difficulty ${difficulty}:`,
+        error,
+      );
+      return [];
+    }
   }
 
   // ✅ NEW: Get cache statistics

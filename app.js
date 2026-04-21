@@ -14,11 +14,13 @@ const practiceMatchRoutes = require("./routes/practicematch");
 const friendRoutes = require("./routes/friend");
 const adminRoutes = require("./routes/admin");
 const notificationRoutes = require("./routes/notification");
+const computerGameRoutes = require("./routes/computerGame");
 const notificationScheduler = require("./cronJobs/notification");
 
 // ✅ Import badge socket handler and badge service
 const registerBadgeSocket = require("./controller/BadgeSocket");
 const badgeService = require("./services/BadgeService");
+const registerComputerGameSocket = require("./controller/computerGameSocket");
 
 const app = express();
 const server = http.createServer(app);
@@ -51,9 +53,13 @@ app.use("/api/practice", practiceMatchRoutes);
 app.use("/api/friend", friendRoutes);
 app.use("/api/match", matchRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/computer-game", computerGameRoutes);
 app.use("/api", notificationRoutes);
 
 require("./controller/pvpController")(io);
+
+// ✅ Register Computer Mode Socket Namespace
+registerComputerGameSocket(io);
 
 // test route
 app.get("/", (req, res) => {
