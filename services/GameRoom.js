@@ -391,21 +391,23 @@ class GameRoom {
     await this.saveGameToDatabase(gameResults);
     this.markPlayersAsNotInGame();
 
-    // ✅ Update PvP stats so badge counters are accurate (non-blocking)
-    for (const playerResult of gameResults.players) {
-      const won = playerResult.playerId === remainingPlayer.id;
-      Player.findById(playerResult.playerId)
-        .then((p) => {
-          if (p) return p.updatePvPStats(this.difficulty, won);
-        })
-        .catch(() => {});
-    }
-
-    // ✅ Badge system: both players complete a PvP match on disconnect (non-blocking)
-    // Badges are sent via dedicated BadgeSocket, not PVP socket
-    for (const player of this.players) {
-      badgeService.onPvPGameCompleted(player.id).catch(() => {});
-    }
+    // ✅ Update PvP stats AND award badges — stats must be saved first so
+    // badgeService reads the correct (post-game) gamesPlayed count.
+    await Promise.all(
+      gameResults.players.map(async (playerResult) => {
+        try {
+          const won = playerResult.playerId === remainingPlayer.id;
+          const p = await Player.findById(playerResult.playerId);
+          if (p) await p.updatePvPStats(this.difficulty, won);
+          await badgeService.onPvPGameCompleted(playerResult.playerId);
+        } catch (err) {
+          console.error(
+            `⚠️  Post-game update failed for ${playerResult.playerId}:`,
+            err.message,
+          );
+        }
+      }),
+    );
 
     if (this.io && remainingPlayer.socketId) {
       this.io.to(remainingPlayer.socketId).emit("grace-period-expired", {
@@ -816,21 +818,25 @@ class GameRoom {
     const gameResults = await this.calculateGameResults();
     await this.saveGameToDatabase(gameResults);
 
-    // ✅ Update PvP stats so badge counters are accurate (non-blocking)
-    for (const playerResult of gameResults.players) {
-      const won = playerResult.won;
-
-      const player = await Player.findById(playerResult.playerId);
-      if (player) {
-        await player.updatePvPStats(this.difficulty, won);
-      }
-    }
-
-    // ✅ Badge system: award PvP completion badges (non-blocking)
-    // Badges are sent via dedicated BadgeSocket, not PVP socket
-    for (const player of this.players) {
-      await badgeService.onPvPGameCompleted(player.id);
-    }
+    // ✅ Update PvP stats AND award badges — stats must be saved first so
+    // badgeService reads the correct (post-game) gamesPlayed count.
+    // Run both players in parallel but await the full chain before continuing.
+    await Promise.all(
+      gameResults.players.map(async (playerResult) => {
+        try {
+          const p = await Player.findById(playerResult.playerId);
+          if (p) await p.updatePvPStats(this.difficulty, playerResult.won);
+          // badges run after stats are saved — no stale read
+          await badgeService.onPvPGameCompleted(playerResult.playerId);
+        } catch (err) {
+          // Never let stats/badge errors break the game result delivery
+          console.error(
+            `⚠️  Post-game update failed for ${playerResult.playerId}:`,
+            err.message,
+          );
+        }
+      }),
+    );
 
     // ✅ CRITICAL: Mark players as NOT in game
     this.markPlayersAsNotInGame();
