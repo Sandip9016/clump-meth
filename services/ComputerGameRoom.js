@@ -18,7 +18,6 @@ class ComputerGameRoom {
 
     this.playerId = playerId;
     this.computerLevel = computerLevel;
-
     this.gameMode = gameMode;
     this.gameDuration = config.gameTiming[gameMode].totalDuration * 1000;
     this.questions = questions;
@@ -50,6 +49,18 @@ class ComputerGameRoom {
 
     this.difficulty = null;
     this.playerRatingBefore = null;
+
+    // ── Independent timer tracking ────────────────────────────────────────
+    // computerTimers: questionIndex -> setTimeout handle (computer's own countdown)
+    // computerAlreadyEmitted: Set of questionIndexes where computerAnswerResult was sent
+    // playerAlreadyAnswered: Set of questionIndexes player has submitted
+    // questionServedAt: timestamp when current question was served to frontend
+    // pendingQuestionIndex: which question is currently active
+    this.computerTimers = new Map();
+    this.computerAlreadyEmitted = new Set();
+    this.playerAlreadyAnswered = new Set();
+    this.questionServedAt = null;
+    this.pendingQuestionIndex = null;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -95,82 +106,84 @@ class ComputerGameRoom {
 
   // ─────────────────────────────────────────────────────────────────────────
   /**
-   * Fetch next question and pre-generate the computer's decision for it.
+   * Pre-generate the computer's decision for a question.
+   * Called by serveNextQuestion in the socket controller when a question is served.
+   * Replaces the old getNextQuestion() which also advanced currentQuestionIndex.
    */
-  getNextQuestion() {
-    if (this.currentQuestionIndex >= this.questions.length) {
-      return null;
-    }
-
-    const question = this.questions[this.currentQuestionIndex];
-    this.currentQuestionIndex++;
+  prepareComputerDecision(questionIndex) {
+    const question = this.questions[questionIndex];
+    if (!question) return null;
 
     const computerDecision = ComputerAI.getComputerDecision(
       this.computerAIState,
       question,
     );
-    this.computerPendingAnswers.set(
-      this.currentQuestionIndex - 1,
-      computerDecision,
+    this.computerPendingAnswers.set(questionIndex, computerDecision);
+    // Track how many questions have been served
+    this.currentQuestionIndex = Math.max(
+      this.currentQuestionIndex,
+      questionIndex + 1,
     );
-
-    return question;
+    return computerDecision;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
   /**
-   * Handle player answer submission.
-   *
-   * Both player AND computer are treated as real parallel players (like PVP):
-   *
-   *  SCORE  — both always update regardless of who answered first
-   *           correct → +2,  wrong → -1 (floor 0),  skip → 0
-   *
-   *  STREAK — both always update regardless of order
-   *           correct → +1,  wrong/skip → reset to 0
-   *
-   *  METER  — only the player who answered FIRST gets meter change on that Q.
-   *           The slower player gets 0 meter change for that question.
-   *           skip → no meter change for the computer (and no score/streak change)
-   *
-   * Meter bounds: floor 1, cap 10  (spec §6.2)
-   * Score bounds: floor 0
+   * Called when the computer's independent timer fires BEFORE the player answers.
+   * Updates computer score/meter/streak. Player side is untouched — they may
+   * still answer after this, and handlePlayerAnswer will handle their side.
+   */
+  processComputerAnsweredFirst(questionIndex) {
+    const computerDecision = this.computerPendingAnswers.get(questionIndex);
+    if (!computerDecision) return;
+
+    if (computerDecision.action === "skip") {
+      this.computerStreak = 0;
+    } else if (computerDecision.isCorrect) {
+      this.computerScore += 2;
+      this.computerStreak += 1;
+      this.computerCorrectAnswers += 1;
+      // Computer answered first → gets meter change
+      this.computerMeter = Math.min(this.computerMeter + 2, 10);
+    } else {
+      this.computerScore = Math.max(this.computerScore - 1, 0);
+      this.computerStreak = 0;
+      // Computer answered first → gets meter penalty
+      this.computerMeter = Math.max(this.computerMeter - 1, 1);
+    }
+    this.computerQuestionsAnswered += 1;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  /**
+   * Handle player answer. Now accepts explicit playerAnsweredFirst flag
+   * resolved by the socket controller using real timestamps.
    */
   async handlePlayerAnswer(
     questionIndex,
     playerAnswer,
     playerTimeSpent,
     isCorrect,
+    playerAnsweredFirst,
   ) {
     const question = this.questions[questionIndex];
-    if (!question) {
-      throw new Error(`Question ${questionIndex} not found`);
-    }
+    if (!question) throw new Error(`Question ${questionIndex} not found`);
 
     const computerDecision = this.computerPendingAnswers.get(questionIndex);
-    if (!computerDecision) {
+    if (!computerDecision)
       throw new Error(
         `Computer decision not found for question ${questionIndex}`,
       );
-    }
 
-    // Who answered first — determines who gets the meter change.
-    // A computer SKIP does not count as "answering first" — it is opting out.
-    // When the computer skips, the player's answer is uncontested and always
-    // gets the meter change, regardless of timing.
     const computerSkipped = computerDecision.action === "skip";
-    const playerAnsweredFirst =
-      computerSkipped || playerTimeSpent < computerDecision.delayMs;
     const whoAnsweredFirst = playerAnsweredFirst ? "player" : "computer";
 
-    // ── PLAYER: score + streak always update ────────────────────────────────
+    // ── PLAYER: score + streak ───────────────────────────────────────────
     let playerMeterChange = 0;
-
     if (isCorrect) {
       this.playerScore += 2;
       this.playerStreak += 1;
       this.playerCorrectAnswers += 1;
-      // Meter only if player answered first
       if (playerAnsweredFirst) {
         playerMeterChange = 2;
         this.playerMeter = Math.min(this.playerMeter + 2, 10);
@@ -178,7 +191,6 @@ class ComputerGameRoom {
     } else {
       this.playerScore = Math.max(this.playerScore - 1, 0);
       this.playerStreak = 0;
-      // Meter penalty only if player answered first
       if (playerAnsweredFirst) {
         playerMeterChange = -1;
         this.playerMeter = Math.max(this.playerMeter - 1, 1);
@@ -186,34 +198,36 @@ class ComputerGameRoom {
     }
     this.playerQuestionsAnswered += 1;
 
-    // ── COMPUTER: score + streak always update ──────────────────────────────
+    // ── COMPUTER: score + streak (only if computer timer hasn't already fired) ─
+    // If computer already fired independently (processComputerAnsweredFirst ran),
+    // skip updating computer state here to avoid double-counting.
+    const computerAlreadyProcessed =
+      this.computerAlreadyEmitted.has(questionIndex);
     let computerMeterChange = 0;
 
-    if (computerDecision.action === "skip") {
-      // Spec §4.3: skip → no score change, no meter change, streak resets
-      this.computerStreak = 0;
-      // computerScore and computerMeter unchanged
-    } else if (computerDecision.isCorrect) {
-      this.computerScore += 2;
-      this.computerStreak += 1;
-      this.computerCorrectAnswers += 1;
-      // Meter only if computer answered first
-      if (!playerAnsweredFirst) {
-        computerMeterChange = 2;
-        this.computerMeter = Math.min(this.computerMeter + 2, 10);
+    if (!computerAlreadyProcessed) {
+      if (computerSkipped) {
+        this.computerStreak = 0;
+      } else if (computerDecision.isCorrect) {
+        this.computerScore += 2;
+        this.computerStreak += 1;
+        this.computerCorrectAnswers += 1;
+        if (!playerAnsweredFirst) {
+          computerMeterChange = 2;
+          this.computerMeter = Math.min(this.computerMeter + 2, 10);
+        }
+      } else {
+        this.computerScore = Math.max(this.computerScore - 1, 0);
+        this.computerStreak = 0;
+        if (!playerAnsweredFirst) {
+          computerMeterChange = -1;
+          this.computerMeter = Math.max(this.computerMeter - 1, 1);
+        }
       }
-    } else {
-      this.computerScore = Math.max(this.computerScore - 1, 0);
-      this.computerStreak = 0;
-      // Meter penalty only if computer answered first
-      if (!playerAnsweredFirst) {
-        computerMeterChange = -1;
-        this.computerMeter = Math.max(this.computerMeter - 1, 1);
-      }
+      this.computerQuestionsAnswered += 1;
     }
-    this.computerQuestionsAnswered += 1;
 
-    // ── Question history (Phase 2 data prep — spec §6.4) ───────────────────
+    // ── Question history ─────────────────────────────────────────────────
     const questionDetail = {
       question: question.question,
       correctAnswer: question.answer,
@@ -227,12 +241,9 @@ class ComputerGameRoom {
       },
       computerResponse: {
         answer: computerDecision.answer,
-        isCorrect:
-          computerDecision.action === "skip"
-            ? false
-            : computerDecision.isCorrect,
+        isCorrect: computerSkipped ? false : computerDecision.isCorrect,
         timeSpent: computerDecision.timeSpent,
-        skipped: computerDecision.action === "skip",
+        skipped: computerSkipped,
         streakAtMoment: this.computerStreak,
       },
       playerMeterChange,
@@ -262,7 +273,6 @@ class ComputerGameRoom {
     this.gameState = "ended";
     this.gameEndTime = Date.now();
 
-    // Cancel timer if game ended early
     if (this._timerHandle) {
       clearTimeout(this._timerHandle);
       this._timerHandle = null;
@@ -288,7 +298,6 @@ class ComputerGameRoom {
         winner = "Draw";
       }
 
-      // ELO rating change
       const K = 32;
       const computerRating = 1000 + this.computerLevel * 100;
       const expectedScore =
@@ -299,7 +308,6 @@ class ComputerGameRoom {
       const ratingChange = Math.round(K * (actualScore - expectedScore));
       const playerRatingAfter = this.playerRatingBefore + ratingChange;
 
-      // Update player stats
       const levelKey = `level${this.computerLevel}`;
       const levelStats = player.stats.computer[levelKey];
 
@@ -355,7 +363,6 @@ class ComputerGameRoom {
         `💾 ComputerGame saved: ${computerGame._id} | Winner: ${winner} | Rating Change: ${ratingChange}`,
       );
 
-      // ── Badge checks (never throws — badge errors must not break gameplay) ─
       try {
         const cs = player.stats.computer;
         const computerGamesPlayed =
@@ -364,11 +371,8 @@ class ComputerGameRoom {
           (cs.level3.gamesPlayed || 0) +
           (cs.level4.gamesPlayed || 0) +
           (cs.level5.gamesPlayed || 0);
-
-        // overall.totalGames only tracks PvP/practice — add computer games for true total
         const overallGamesPlayed =
           (player.stats.overall.totalGames || 0) + computerGamesPlayed;
-
         await badgeService.onComputerGameCompleted(
           this.playerId,
           computerGamesPlayed,
