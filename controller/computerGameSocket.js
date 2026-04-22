@@ -31,7 +31,7 @@ function logError(context, error) {
 module.exports = function registerComputerGameSocket(io) {
   const computerNamespace = io.of("/computer-game");
 
-  const gameRooms = new Map();   // gameId  -> ComputerGameRoom
+  const gameRooms = new Map(); // gameId  -> ComputerGameRoom
   const playerGames = new Map(); // playerId -> gameId
   const questionService = new QuestionService();
 
@@ -112,7 +112,7 @@ module.exports = function registerComputerGameSocket(io) {
 
         // Start game — onGameEnd callback fires on timer expiry
         gameRoom.startGame(async (result, endReason) => {
-          computerNamespace.to(socket.id).emit("gameEnded", {
+          socket.emit("gameEnded", {
             ...result,
             endReason,
           });
@@ -146,7 +146,7 @@ module.exports = function registerComputerGameSocket(io) {
         }
 
         // gameStarted event arrives just after the ack
-        computerNamespace.to(socket.id).emit("gameStarted", {
+        socket.emit("gameStarted", {
           gameId: gameRoom.id,
           computerDisplayName: initResult.computerDisplayName,
           computerLevel,
@@ -188,7 +188,7 @@ module.exports = function registerComputerGameSocket(io) {
         const nextQuestion = gameRoom.getNextQuestion();
 
         // Emit playerAnswerResult immediately
-        computerNamespace.to(socket.id).emit("playerAnswerResult", {
+        socket.emit("playerAnswerResult", {
           questionIndex,
           isCorrect,
           playerScore: gameRoom.playerScore,
@@ -203,7 +203,7 @@ module.exports = function registerComputerGameSocket(io) {
           // Guard: skip if game was already cleaned up (e.g. player left mid-delay)
           if (!gameRooms.has(gameRoom.id)) return;
 
-          computerNamespace.to(socket.id).emit("computerAnswerResult", {
+          socket.emit("computerAnswerResult", {
             questionIndex,
             answer: result.computerDecision.answer,
             isCorrect:
@@ -220,7 +220,7 @@ module.exports = function registerComputerGameSocket(io) {
           if (nextQuestion) {
             setTimeout(() => {
               if (!gameRooms.has(gameRoom.id)) return;
-              computerNamespace.to(socket.id).emit("nextQuestion", {
+              socket.emit("nextQuestion", {
                 index: gameRoom.currentQuestionIndex - 1,
                 question: nextQuestion.question,
                 input1: nextQuestion.input1,
@@ -233,7 +233,7 @@ module.exports = function registerComputerGameSocket(io) {
             // All 20 questions answered before timer
             const endResult = await gameRoom.endGame("questionsExhausted");
             if (endResult) {
-              computerNamespace.to(socket.id).emit("gameEnded", {
+              socket.emit("gameEnded", {
                 ...endResult,
                 endReason: "questionsExhausted",
               });
@@ -272,7 +272,7 @@ module.exports = function registerComputerGameSocket(io) {
         if (gameRoom.gameState !== "ended") {
           const result = await gameRoom.endGame("playerDisconnect");
           if (result) {
-            computerNamespace.to(socket.id).emit("gameEnded", {
+            socket.emit("gameEnded", {
               ...result,
               endReason: "playerDisconnect",
             });
