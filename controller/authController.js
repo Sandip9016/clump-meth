@@ -1057,6 +1057,10 @@ exports.googleLogin = async (req, res) => {
       profileImage,
     });
 
+    // ✅ Badge: Google Linked + streak for new google user
+    badgeService.onGoogleLinked(newUser._id.toString()).catch(() => {});
+    badgeService.onAppOpened(newUser._id.toString()).catch(() => {});
+
     return res.status(201).json({
       success: true,
       message: "User created via Google login",

@@ -140,16 +140,17 @@ module.exports = function registerBadgeSocket(io) {
    * @param {object} badgeInfo - { badgeId, title, description, category, iconUrl, earnedAt }
    */
   function emitBadgeEarned(playerId, badgeInfo) {
-    const socketId = userIdToSocketId.get(playerId);
-
-    if (socketId) {
-      // Player is online — send real-time
+    const room = `badge:${playerId}`;
+    // Use room-based emit — works even if the player reconnected with a new socketId
+    // io.to(room) is a no-op if no socket has joined the room (player offline)
+    const roomSockets = io.sockets.adapter.rooms.get(room);
+    if (roomSockets && roomSockets.size > 0) {
       console.log(
         `🏅 Emitting badge to online player ${playerId}: ${badgeInfo.title}`,
       );
-      io.to(socketId).emit("badge:earned", badgeInfo);
+      io.to(room).emit("badge:earned", badgeInfo);
     } else {
-      // Player is offline — will be delivered on reconnect
+      // Player is offline — notified=false in DB, will be delivered on reconnect via register-badge-socket
       console.log(
         `💾 Player ${playerId} offline. Badge will be delivered on reconnect: ${badgeInfo.title}`,
       );
