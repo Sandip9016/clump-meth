@@ -99,7 +99,8 @@ module.exports = function registerComputerGameSocket(io) {
 
     // Pre-generate the computer's decision for this question
     const computerDecision = gameRoom.prepareComputerDecision(questionIndex);
-    const computerDelay = Math.min(computerDecision.delayMs, 3000);
+    // const computerDelay = Math.min(computerDecision.delayMs, 3000);
+    const computerDelay = computerDecision.delayMs;
 
     // Start computer's independent countdown from THIS moment (question appeared)
     const timerHandle = setTimeout(async () => {
