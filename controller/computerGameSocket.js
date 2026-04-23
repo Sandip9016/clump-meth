@@ -33,27 +33,26 @@ module.exports = function registerComputerGameSocket(io) {
   const playerGames = new Map(); // playerId -> gameId
   const questionService = new QuestionService();
 
-  // ─── Helper: serve next question and start the computer's independent timer ─
+  // ─── Helper: serve next question for PLAYER and start computer's independent timer ─
   //
-  // This generates questions dynamically (endless mode) and starts the computer's
-  // independent countdown. Both player and computer play independently.
+  // This generates questions dynamically for the player only.
+  // Computer has its own independent question serving system.
   //
-  function serveNextQuestion(gameRoom, socket, questionIndex) {
+  function serveNextPlayerQuestion(gameRoom, socket, playerQuestionIndex) {
     // Check if game is still active and not ending
     if (!gameRooms.has(gameRoom.id) || gameRoom.gameState !== "started") {
       return null;
     }
 
-    // Check if we already have a timer for this question
-    if (gameRoom.computerTimers.has(questionIndex)) {
+    // Check if we already have a timer for this player question
+    if (gameRoom.playerTimers.has(playerQuestionIndex)) {
       return null; // Silently skip duplicates
     }
 
     // Generate question dynamically based on current question meter
-    // Ensure question meter doesn't go below 0 for valid question generation
     const safeQuestionMeter = Math.max(0, gameRoom.questionMeter || 5);
 
-    // Use selected symbols based on user's choice (2 or 4 signs)
+    // Use selected symbols based on user's choice
     const symbols = gameRoom.selectedSymbols || [
       "sum",
       "difference",
@@ -63,61 +62,159 @@ module.exports = function registerComputerGameSocket(io) {
 
     const question = questionService.generateQuestion(
       gameRoom.difficulty,
-      symbols, // Use selected symbols
+      symbols,
       gameRoom.playerRatingBefore,
       safeQuestionMeter,
     );
 
     if (!question) {
       console.error(
-        `❌ [Q${questionIndex}] Failed to generate question - falling back to default`,
+        `❌ [Player Q${playerQuestionIndex}] Failed to generate question - falling back to default`,
       );
-      // Fallback: generate question without meter constraint
       const fallbackQuestion = questionService.generateQuestion(
         gameRoom.difficulty,
         ["sum", "difference", "product", "quotient"],
         gameRoom.playerRatingBefore,
-        5, // Default meter level
+        5,
       );
       if (!fallbackQuestion) {
         console.error(
-          `❌ [Q${questionIndex}] Even fallback question generation failed`,
+          `❌ [Player Q${playerQuestionIndex}] Even fallback question generation failed`,
         );
         return null;
       }
       return fallbackQuestion;
     }
 
-    // Store the generated question for this index
-    if (!gameRoom.questions) gameRoom.questions = [];
-    gameRoom.questions[questionIndex] = question;
+    // Store the generated question for this player index
+    gameRoom.playerQuestions[playerQuestionIndex] = question;
+    gameRoom.playerQuestionIndex = playerQuestionIndex;
 
-    // Record when this question was served so player timeSpent can be compared
-    // against the computer's absolute delay.
-    gameRoom.questionServedAt = Date.now();
-    gameRoom.pendingQuestionIndex = questionIndex;
+    // Record when this question was served
+    gameRoom.playerQuestionServedAt = Date.now();
+    gameRoom.pendingPlayerQuestionIndex = playerQuestionIndex;
 
-    // Pre-generate the computer's decision for this question
-    const computerDecision = gameRoom.prepareComputerDecision(questionIndex);
-    // const computerDelay = Math.min(computerDecision.delayMs, 3000);
+    // Pre-generate the computer's decision for this player question
+    const computerDecision = gameRoom.prepareComputerDecision(
+      playerQuestionIndex,
+      false,
+    );
+    // Use full delay without capping at 3s
     const computerDelay = computerDecision.delayMs;
 
-    // Start computer's independent countdown from THIS moment (question appeared)
+    // Start computer's independent countdown for answering THIS player question
     const timerHandle = setTimeout(async () => {
       if (!gameRooms.has(gameRoom.id) || gameRoom.gameState !== "started")
         return;
 
       // If player already answered this question, computerAnswerResult was
       // already emitted inside submitAnswer — don't double-emit.
-      if (gameRoom.computerAlreadyEmitted.has(questionIndex)) return;
+      if (gameRoom.computerAlreadyEmitted.has(playerQuestionIndex)) return;
 
       // Player has NOT answered yet — computer answers on its own schedule.
-      // Process the computer's result independently (player side stays unchanged).
-      gameRoom.processComputerAnsweredFirst(questionIndex);
-      gameRoom.computerAlreadyEmitted.add(questionIndex);
+      gameRoom.processComputerAnsweredFirst(playerQuestionIndex);
+      gameRoom.computerAlreadyEmitted.add(playerQuestionIndex);
 
       socket.emit("computerAnswerResult", {
-        questionIndex,
+        questionIndex: playerQuestionIndex,
+        answer: computerDecision.answer,
+        isCorrect:
+          computerDecision.action === "skip"
+            ? false
+            : computerDecision.isCorrect,
+        skipped: computerDecision.action === "skip",
+        computerScore: gameRoom.computerScore,
+        computerStreak: gameRoom.computerStreak,
+        questionMeter: gameRoom.questionMeter,
+        whoAnsweredFirst: "computer",
+      });
+    }, computerDelay);
+
+    // Store handle so we can cancel it if player answers before computer fires
+    gameRoom.playerTimers.set(playerQuestionIndex, timerHandle);
+
+    return question;
+  }
+
+  // ─── Helper: serve next question for COMPUTER only (independent play) ─
+  //
+  // Computer has its own question index and answers on its own schedule.
+  //
+  function serveNextComputerQuestion(gameRoom, socket, computerQuestionIndex) {
+    // Check if game is still active and not ending
+    if (!gameRooms.has(gameRoom.id) || gameRoom.gameState !== "started") {
+      return null;
+    }
+
+    // Check if we already have a timer for this computer question
+    if (gameRoom.computerTimers.has(computerQuestionIndex)) {
+      return null; // Silently skip duplicates
+    }
+
+    // Generate question dynamically based on current question meter
+    const safeQuestionMeter = Math.max(0, gameRoom.questionMeter || 5);
+
+    // Use selected symbols based on user's choice
+    const symbols = gameRoom.selectedSymbols || [
+      "sum",
+      "difference",
+      "product",
+      "quotient",
+    ];
+
+    const question = questionService.generateQuestion(
+      gameRoom.difficulty,
+      symbols,
+      gameRoom.playerRatingBefore,
+      safeQuestionMeter,
+    );
+
+    if (!question) {
+      console.error(
+        `❌ [Computer Q${computerQuestionIndex}] Failed to generate question - falling back to default`,
+      );
+      const fallbackQuestion = questionService.generateQuestion(
+        gameRoom.difficulty,
+        ["sum", "difference", "product", "quotient"],
+        gameRoom.playerRatingBefore,
+        5,
+      );
+      if (!fallbackQuestion) {
+        console.error(
+          `❌ [Computer Q${computerQuestionIndex}] Even fallback question generation failed`,
+        );
+        return null;
+      }
+      return fallbackQuestion;
+    }
+
+    // Store the generated question for this computer index
+    gameRoom.computerQuestions[computerQuestionIndex] = question;
+    gameRoom.computerQuestionIndex = computerQuestionIndex;
+
+    // Record when this question was served
+    gameRoom.computerQuestionServedAt = Date.now();
+    gameRoom.pendingComputerQuestionIndex = computerQuestionIndex;
+
+    // Pre-generate the computer's decision for its own question
+    const computerDecision = gameRoom.prepareComputerDecision(
+      computerQuestionIndex,
+      true,
+    );
+    // Use full delay without capping at 3s
+    const computerDelay = computerDecision.delayMs;
+
+    // Start computer's independent countdown for answering ITS OWN question
+    const timerHandle = setTimeout(async () => {
+      if (!gameRooms.has(gameRoom.id) || gameRoom.gameState !== "started")
+        return;
+
+      // Computer answers its own question
+      gameRoom.processComputerAnsweredFirst(computerQuestionIndex);
+      gameRoom.computerAlreadyEmitted.add(computerQuestionIndex);
+
+      socket.emit("computerAnswerResult", {
+        questionIndex: computerQuestionIndex,
         answer: computerDecision.answer,
         isCorrect:
           computerDecision.action === "skip"
@@ -130,28 +227,17 @@ module.exports = function registerComputerGameSocket(io) {
         whoAnsweredFirst: "computer",
       });
 
-      // Serve next question immediately after computer answers (independent play)
+      // Serve next computer question after transition delay
       setTimeout(() => {
         if (!gameRooms.has(gameRoom.id) || gameRoom.gameState !== "started")
           return;
-        const nextIndex = questionIndex + 1;
-        const nextQ = serveNextQuestion(gameRoom, socket, nextIndex);
-        if (nextQ) {
-          socket.emit("nextQuestion", {
-            index: nextIndex,
-            question: nextQ.question,
-            input1: nextQ.input1,
-            input2: nextQ.input2,
-            symbol: nextQ.symbol,
-            finalLevel: nextQ.finalLevel,
-            questionMeter: gameRoom.questionMeter,
-          });
-        }
+        const nextIndex = computerQuestionIndex + 1;
+        serveNextComputerQuestion(gameRoom, socket, nextIndex);
       }, config.gameTiming[gameRoom.gameMode].transitionDelay);
     }, computerDelay);
 
-    // Store handle so we can cancel it if player answers before computer fires
-    gameRoom.computerTimers.set(questionIndex, timerHandle);
+    // Store handle
+    gameRoom.computerTimers.set(computerQuestionIndex, timerHandle);
 
     return question;
   }
@@ -244,11 +330,18 @@ module.exports = function registerComputerGameSocket(io) {
         gameRoom.startGame(async (result, endReason) => {
           // Clear any pending computer timers before emitting gameEnded
           for (const [
-            questionIndex,
+            playerQuestionIndex,
+            handle,
+          ] of gameRoom.playerTimers.entries()) {
+            clearTimeout(handle);
+          }
+          for (const [
+            computerQuestionIndex,
             handle,
           ] of gameRoom.computerTimers.entries()) {
             clearTimeout(handle);
           }
+          gameRoom.playerTimers.clear();
           gameRoom.computerTimers.clear();
           gameRoom.computerAlreadyEmitted.clear();
 
@@ -257,8 +350,19 @@ module.exports = function registerComputerGameSocket(io) {
           playerGames.delete(playerId);
         });
 
-        // Serve Q0 — this starts computer's independent countdown for Q0
-        const firstQuestion = serveNextQuestion(gameRoom, socket, 0);
+        // Serve Q0 for player — this starts computer's independent countdown for Q0
+        const firstPlayerQuestion = serveNextPlayerQuestion(
+          gameRoom,
+          socket,
+          0,
+        );
+
+        // Also start computer's independent question serving (PvP style)
+        setTimeout(() => {
+          if (gameRooms.has(gameRoom.id) && gameRoom.gameState === "started") {
+            serveNextComputerQuestion(gameRoom, socket, 0);
+          }
+        }, 1000); // Start computer's first question after 1 second delay
 
         if (callback) {
           console.log(
@@ -272,14 +376,14 @@ module.exports = function registerComputerGameSocket(io) {
             computerDisplayName: initResult.computerDisplayName,
             difficulty,
             selectedSymbols: symbols, // Echo back selected symbols
-            question: firstQuestion
+            question: firstPlayerQuestion
               ? {
                   index: 0,
-                  question: firstQuestion.question,
-                  input1: firstQuestion.input1,
-                  input2: firstQuestion.input2,
-                  symbol: firstQuestion.symbol,
-                  finalLevel: firstQuestion.finalLevel,
+                  question: firstPlayerQuestion.question,
+                  input1: firstPlayerQuestion.input1,
+                  input2: firstPlayerQuestion.input2,
+                  symbol: firstPlayerQuestion.symbol,
+                  finalLevel: firstPlayerQuestion.finalLevel,
                 }
               : null,
             gameState: gameRoom.getState(),
@@ -315,7 +419,7 @@ module.exports = function registerComputerGameSocket(io) {
             const recentGameRoom = gameRooms.get(recentGameId);
             if (recentGameRoom && recentGameRoom.gameState === "ended") {
               console.log(
-                `⚠️ [Q${questionIndex}] Game recently ended, rejecting answer`,
+                `⚠️ [Player Q${questionIndex}] Game recently ended, rejecting answer`,
               );
               if (callback)
                 callback({ success: false, error: "Game has ended" });
@@ -329,8 +433,8 @@ module.exports = function registerComputerGameSocket(io) {
         if (gameRoom.gameState !== "started")
           throw new Error("Game is not active");
 
-        const question = gameRoom.questions[questionIndex];
-        if (!question) throw new Error("Question not found");
+        const question = gameRoom.playerQuestions[questionIndex];
+        if (!question) throw new Error("Player question not found");
 
         // Ignore duplicate submissions for the same question
         if (gameRoom.playerAlreadyAnswered.has(questionIndex)) {
@@ -343,7 +447,6 @@ module.exports = function registerComputerGameSocket(io) {
 
         // Determine actual whoAnsweredFirst based on real elapsed time.
         // Computer's delay was set from the moment the question was served.
-        // If the computer's timer already fired, computer answered first.
         const computerAlreadyFired =
           gameRoom.computerAlreadyEmitted.has(questionIndex);
         const computerDecision =
@@ -356,10 +459,10 @@ module.exports = function registerComputerGameSocket(io) {
           (!computerAlreadyFired && timeSpent < computerDecision?.delayMs);
 
         // Cancel the computer's independent timer — we're resolving this question now
-        const timerHandle = gameRoom.computerTimers.get(questionIndex);
+        const timerHandle = gameRoom.playerTimers.get(questionIndex);
         if (timerHandle) {
           clearTimeout(timerHandle);
-          gameRoom.computerTimers.delete(questionIndex);
+          gameRoom.playerTimers.delete(questionIndex);
         }
 
         // Process player answer with the resolved whoAnsweredFirst
@@ -387,10 +490,10 @@ module.exports = function registerComputerGameSocket(io) {
           if (!computerAlreadyFired) {
             gameRoom.computerAlreadyEmitted.add(questionIndex);
 
-            const elapsed = Date.now() - gameRoom.questionServedAt;
+            const elapsed = Date.now() - gameRoom.playerQuestionServedAt;
             const remainingDelay = Math.max(
               0,
-              Math.min(computerDecision.delayMs, 3000) - elapsed,
+              computerDecision.delayMs - elapsed, // No capping at 3s
             );
 
             setTimeout(async () => {
@@ -414,18 +517,22 @@ module.exports = function registerComputerGameSocket(io) {
                 whoAnsweredFirst: result.whoAnsweredFirst,
               });
 
-              // Serve next question after transition delay (independent play)
-              const nextIndex = questionIndex + 1;
+              // Serve next PLAYER question after transition delay (independent play)
+              const nextPlayerIndex = questionIndex + 1;
               setTimeout(() => {
                 if (
                   !gameRooms.has(gameRoom.id) ||
                   gameRoom.gameState !== "started"
                 )
                   return;
-                const nextQ = serveNextQuestion(gameRoom, socket, nextIndex);
+                const nextQ = serveNextPlayerQuestion(
+                  gameRoom,
+                  socket,
+                  nextPlayerIndex,
+                );
                 if (nextQ) {
                   socket.emit("nextQuestion", {
-                    index: nextIndex,
+                    index: nextPlayerIndex,
                     question: nextQ.question,
                     input1: nextQ.input1,
                     input2: nextQ.input2,
@@ -437,18 +544,22 @@ module.exports = function registerComputerGameSocket(io) {
               }, config.gameTiming[gameRoom.gameMode].transitionDelay);
             }, remainingDelay);
           } else {
-            // Serve next question after transition delay (independent play)
-            const nextIndex = questionIndex + 1;
+            // Serve next PLAYER question after transition delay (independent play)
+            const nextPlayerIndex = questionIndex + 1;
             setTimeout(() => {
               if (
                 !gameRooms.has(gameRoom.id) ||
                 gameRoom.gameState !== "started"
               )
                 return;
-              const nextQ = serveNextQuestion(gameRoom, socket, nextIndex);
+              const nextQ = serveNextPlayerQuestion(
+                gameRoom,
+                socket,
+                nextPlayerIndex,
+              );
               if (nextQ) {
                 socket.emit("nextQuestion", {
-                  index: nextIndex,
+                  index: nextPlayerIndex,
                   question: nextQ.question,
                   input1: nextQ.input1,
                   input2: nextQ.input2,
@@ -488,11 +599,14 @@ module.exports = function registerComputerGameSocket(io) {
         if (!gameRoom) return;
 
         if (gameRoom.gameState !== "ended") {
-          // Clear independent computer timers
+          // Clear all independent computer timers
+          for (const handle of gameRoom.playerTimers.values())
+            clearTimeout(handle);
           for (const handle of gameRoom.computerTimers.values())
             clearTimeout(handle);
+          gameRoom.playerTimers.clear();
           gameRoom.computerTimers.clear();
-
+          gameRoom.computerAlreadyEmitted.clear();
           const result = await gameRoom.endGame("playerDisconnect");
           if (result) {
             socket.emit("gameEnded", {
@@ -519,8 +633,11 @@ module.exports = function registerComputerGameSocket(io) {
           const gameRoom = gameRooms.get(gameId);
 
           if (gameRoom && gameRoom.gameState !== "ended") {
+            for (const handle of gameRoom.playerTimers.values())
+              clearTimeout(handle);
             for (const handle of gameRoom.computerTimers.values())
               clearTimeout(handle);
+            gameRoom.playerTimers.clear();
             gameRoom.computerTimers.clear();
             await gameRoom.endGame("playerDisconnect");
           }

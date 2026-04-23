@@ -41,10 +41,20 @@ class ComputerGameRoom {
     this.computerCorrectAnswers = 0;
     this.computerQuestionsAnswered = 0;
 
-    this.currentQuestionIndex = 0;
+    // Independent question indices for PvP-style play
+    this.playerQuestionIndex = 0;
+    this.computerQuestionIndex = 0;
+
+    // Shared question history (like PvP)
     this.questionHistory = [];
     this.computerAIState = null;
     this.computerPendingAnswers = new Map();
+
+    // Player questions storage (indexed by playerQuestionIndex)
+    this.playerQuestions = [];
+
+    // Computer questions storage (indexed by computerQuestionIndex)
+    this.computerQuestions = [];
 
     this.difficulty = null;
     this.playerRatingBefore = null;
@@ -58,17 +68,23 @@ class ComputerGameRoom {
       ),
     );
 
-    // ── Independent timer tracking ────────────────────────────────────────
-    // computerTimers: questionIndex -> setTimeout handle (computer's own countdown)
-    // computerAlreadyEmitted: Set of questionIndexes where computerAnswerResult was sent
-    // playerAlreadyAnswered: Set of questionIndexes player has submitted
-    // questionServedAt: timestamp when current question was served to frontend
-    // pendingQuestionIndex: which question is currently active
+    // ── Independent timer tracking for PvP-style play ────────────────────────
+    // playerTimers: playerQuestionIndex -> setTimeout handle (for computer's independent answers)
+    // computerTimers: computerQuestionIndex -> setTimeout handle (computer's own countdown)
+    // computerAlreadyEmitted: Set of computerQuestionIndexes where computerAnswerResult was sent
+    // playerAlreadyAnswered: Set of playerQuestionIndexes player has submitted
+    // playerQuestionServedAt: timestamp when current player question was served
+    // computerQuestionServedAt: timestamp when current computer question was served
+    // pendingPlayerQuestionIndex: which player question is currently active
+    // pendingComputerQuestionIndex: which computer question is currently active
+    this.playerTimers = new Map();
     this.computerTimers = new Map();
     this.computerAlreadyEmitted = new Set();
     this.playerAlreadyAnswered = new Set();
-    this.questionServedAt = null;
-    this.pendingQuestionIndex = null;
+    this.playerQuestionServedAt = null;
+    this.computerQuestionServedAt = null;
+    this.pendingPlayerQuestionIndex = null;
+    this.pendingComputerQuestionIndex = null;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -129,11 +145,13 @@ class ComputerGameRoom {
   // ─────────────────────────────────────────────────────────────────────────
   /**
    * Pre-generate the computer's decision for a question.
-   * Called by serveNextQuestion in the socket controller when a question is served.
-   * Replaces the old getNextQuestion() which also advanced currentQuestionIndex.
+   * Called when a question is served to either player or computer.
    */
-  prepareComputerDecision(questionIndex) {
-    const question = this.questions[questionIndex];
+  prepareComputerDecision(questionIndex, isForComputer = false) {
+    const questionsArray = isForComputer
+      ? this.computerQuestions
+      : this.playerQuestions;
+    const question = questionsArray[questionIndex];
     if (!question) return null;
 
     const computerDecision = ComputerAI.getComputerDecision(
@@ -141,19 +159,14 @@ class ComputerGameRoom {
       question,
     );
     this.computerPendingAnswers.set(questionIndex, computerDecision);
-    // Track how many questions have been served
-    this.currentQuestionIndex = Math.max(
-      this.currentQuestionIndex,
-      questionIndex + 1,
-    );
+
     return computerDecision;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
   /**
-   * Called when the computer's independent timer fires BEFORE the player answers.
-   * Updates computer score/meter/streak. Player side is untouched — they may
-   * still answer after this, and handlePlayerAnswer will handle their side.
+   * Called when the computer answers a question (either by timer or after player).
+   * Updates computer score/meter/streak.
    */
   processComputerAnsweredFirst(questionIndex) {
     const computerDecision = this.computerPendingAnswers.get(questionIndex);
@@ -174,23 +187,24 @@ class ComputerGameRoom {
 
   // ─────────────────────────────────────────────────────────────────────────
   /**
-   * Handle player answer. Now accepts explicit playerAnsweredFirst flag
-   * resolved by the socket controller using real timestamps.
+   * Handle player answer. Works with player's independent question index.
    */
   async handlePlayerAnswer(
-    questionIndex,
+    playerQuestionIndex,
     playerAnswer,
     playerTimeSpent,
     isCorrect,
     playerAnsweredFirst,
   ) {
-    const question = this.questions[questionIndex];
-    if (!question) throw new Error(`Question ${questionIndex} not found`);
+    const question = this.playerQuestions[playerQuestionIndex];
+    if (!question)
+      throw new Error(`Player question ${playerQuestionIndex} not found`);
 
-    const computerDecision = this.computerPendingAnswers.get(questionIndex);
+    const computerDecision =
+      this.computerPendingAnswers.get(playerQuestionIndex);
     if (!computerDecision)
       throw new Error(
-        `Computer decision not found for question ${questionIndex}`,
+        `Computer decision not found for player question ${playerQuestionIndex}`,
       );
 
     const computerSkipped = computerDecision.action === "skip";
@@ -217,10 +231,8 @@ class ComputerGameRoom {
     this.questionMeter = Math.max(2, this.questionMeter + qmChange);
 
     // ── COMPUTER: score + streak (only if computer timer hasn't already fired) ─
-    // If computer already fired independently (processComputerAnsweredFirst ran),
-    // skip updating computer state here to avoid double-counting.
     const computerAlreadyProcessed =
-      this.computerAlreadyEmitted.has(questionIndex);
+      this.computerAlreadyEmitted.has(playerQuestionIndex);
 
     if (!computerAlreadyProcessed) {
       if (computerSkipped) {
@@ -291,6 +303,12 @@ class ComputerGameRoom {
       clearTimeout(this._timerHandle);
       this._timerHandle = null;
     }
+
+    // Clear all independent timers
+    for (const handle of this.playerTimers.values()) clearTimeout(handle);
+    for (const handle of this.computerTimers.values()) clearTimeout(handle);
+    this.playerTimers.clear();
+    this.computerTimers.clear();
 
     const gameDurationSeconds = Math.floor(
       (this.gameEndTime - this.gameStartTime) / 1000,
@@ -431,8 +449,10 @@ class ComputerGameRoom {
       computerScore: this.computerScore,
       computerStreak: this.computerStreak,
       questionMeter: this.questionMeter,
-      currentQuestionIndex: this.currentQuestionIndex,
-      totalQuestions: this.questions.length,
+      playerQuestionIndex: this.playerQuestionIndex,
+      computerQuestionIndex: this.computerQuestionIndex,
+      totalQuestions:
+        this.playerQuestions.length + this.computerQuestions.length,
     };
   }
 }
