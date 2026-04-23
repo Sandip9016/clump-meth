@@ -13,6 +13,7 @@ class ComputerGameRoom {
     questions,
     questionService,
     io,
+    playerRating = null,
   ) {
     this.id = `computer_${playerId}_${computerLevel}_${Date.now()}`;
 
@@ -30,14 +31,12 @@ class ComputerGameRoom {
 
     // Player state
     this.playerScore = 0;
-    this.playerMeter = 5;
     this.playerStreak = 0;
     this.playerCorrectAnswers = 0;
     this.playerQuestionsAnswered = 0;
 
     // Computer state
     this.computerScore = 0;
-    this.computerMeter = 5;
     this.computerStreak = 0;
     this.computerCorrectAnswers = 0;
     this.computerQuestionsAnswered = 0;
@@ -49,6 +48,15 @@ class ComputerGameRoom {
 
     this.difficulty = null;
     this.playerRatingBefore = null;
+
+    // Questions meter (shared like PvP)
+    this.questionMeter = Math.max(
+      5,
+      questionService.getInitialQuestionMeter(
+        playerRating || 1000,
+        1000 + computerLevel * 100,
+      ),
+    );
 
     // ── Independent timer tracking ────────────────────────────────────────
     // computerTimers: questionIndex -> setTimeout handle (computer's own countdown)
@@ -94,14 +102,28 @@ class ComputerGameRoom {
     this.gameState = "started";
     this.gameStartTime = Date.now();
     this._onGameEnd = onGameEnd || null;
-    console.log(`🎮 ComputerGameRoom started: ${this.id}`);
+    console.log(
+      `🎮 ComputerGameRoom started: ${this.id} | Duration: ${this.gameDuration}ms (${this.gameMode})`,
+    );
+
+    // Store a reference to self for the timer callback
+    const self = this;
+
+    // Add 5 second grace period to allow pending answers to be processed
+    const gracePeriod = 5000;
+    const totalDuration = this.gameDuration + gracePeriod;
 
     this._timerHandle = setTimeout(async () => {
-      const result = await this.endGame("timerExpired");
-      if (result && this._onGameEnd) {
-        this._onGameEnd(result, "timerExpired");
+      console.log(`⏰ [${self.id}] Game timer expired - ending game`);
+      try {
+        const result = await self.endGame("timerExpired");
+        if (result && self._onGameEnd) {
+          self._onGameEnd(result, "timerExpired");
+        }
+      } catch (error) {
+        console.error(`❌ [${self.id}] Error in timer callback:`, error);
       }
-    }, this.gameDuration);
+    }, totalDuration);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -143,13 +165,9 @@ class ComputerGameRoom {
       this.computerScore += 2;
       this.computerStreak += 1;
       this.computerCorrectAnswers += 1;
-      // Computer answered first → gets meter change
-      this.computerMeter = Math.min(this.computerMeter + 2, 10);
     } else {
       this.computerScore = Math.max(this.computerScore - 1, 0);
       this.computerStreak = 0;
-      // Computer answered first → gets meter penalty
-      this.computerMeter = Math.max(this.computerMeter - 1, 1);
     }
     this.computerQuestionsAnswered += 1;
   }
@@ -179,31 +197,30 @@ class ComputerGameRoom {
     const whoAnsweredFirst = playerAnsweredFirst ? "player" : "computer";
 
     // ── PLAYER: score + streak ───────────────────────────────────────────
-    let playerMeterChange = 0;
     if (isCorrect) {
       this.playerScore += 2;
       this.playerStreak += 1;
       this.playerCorrectAnswers += 1;
-      if (playerAnsweredFirst) {
-        playerMeterChange = 2;
-        this.playerMeter = Math.min(this.playerMeter + 2, 10);
-      }
     } else {
       this.playerScore = Math.max(this.playerScore - 1, 0);
       this.playerStreak = 0;
-      if (playerAnsweredFirst) {
-        playerMeterChange = -1;
-        this.playerMeter = Math.max(this.playerMeter - 1, 1);
-      }
     }
     this.playerQuestionsAnswered += 1;
+
+    // ── Update shared questions meter (like PvP) ─────────────────────────────
+    const qmChange = this.questionService.calculateQMChange(
+      isCorrect,
+      this.playerRatingBefore,
+      question.finalLevel || question.levelNumber || 5,
+    );
+    // Ensure question meter never goes below 2 to maintain valid question generation
+    this.questionMeter = Math.max(2, this.questionMeter + qmChange);
 
     // ── COMPUTER: score + streak (only if computer timer hasn't already fired) ─
     // If computer already fired independently (processComputerAnsweredFirst ran),
     // skip updating computer state here to avoid double-counting.
     const computerAlreadyProcessed =
       this.computerAlreadyEmitted.has(questionIndex);
-    let computerMeterChange = 0;
 
     if (!computerAlreadyProcessed) {
       if (computerSkipped) {
@@ -212,17 +229,9 @@ class ComputerGameRoom {
         this.computerScore += 2;
         this.computerStreak += 1;
         this.computerCorrectAnswers += 1;
-        if (!playerAnsweredFirst) {
-          computerMeterChange = 2;
-          this.computerMeter = Math.min(this.computerMeter + 2, 10);
-        }
       } else {
         this.computerScore = Math.max(this.computerScore - 1, 0);
         this.computerStreak = 0;
-        if (!playerAnsweredFirst) {
-          computerMeterChange = -1;
-          this.computerMeter = Math.max(this.computerMeter - 1, 1);
-        }
       }
       this.computerQuestionsAnswered += 1;
     }
@@ -246,30 +255,35 @@ class ComputerGameRoom {
         skipped: computerSkipped,
         streakAtMoment: this.computerStreak,
       },
-      playerMeterChange,
-      computerMeterChange,
+      playerMeterChange: qmChange,
+      computerMeterChange: 0, // No individual meters
       whoAnsweredFirst,
+      questionMeter: this.questionMeter, // Add shared meter to history
     };
 
     this.questionHistory.push(questionDetail);
 
     return {
       playerScore: this.playerScore,
-      playerMeter: this.playerMeter,
       playerStreak: this.playerStreak,
       computerScore: this.computerScore,
-      computerMeter: this.computerMeter,
       computerStreak: this.computerStreak,
       computerDecision,
       whoAnsweredFirst,
       questionDetail,
+      questionMeter: this.questionMeter,
     };
   }
 
   // ─────────────────────────────────────────────────────────────────────────
   async endGame(endReason) {
-    if (this.gameState === "ended") return null;
+    if (this.gameState === "ended") {
+      return null;
+    }
 
+    console.log(
+      `🏁 [${this.id}] Ending game - Reason: ${endReason} | Duration: ${Math.floor((Date.now() - this.gameStartTime) / 1000)}s`,
+    );
     this.gameState = "ended";
     this.gameEndTime = Date.now();
 
@@ -413,11 +427,10 @@ class ComputerGameRoom {
       gameId: this.id,
       gameState: this.gameState,
       playerScore: this.playerScore,
-      playerMeter: this.playerMeter,
       playerStreak: this.playerStreak,
       computerScore: this.computerScore,
-      computerMeter: this.computerMeter,
       computerStreak: this.computerStreak,
+      questionMeter: this.questionMeter,
       currentQuestionIndex: this.currentQuestionIndex,
       totalQuestions: this.questions.length,
     };
