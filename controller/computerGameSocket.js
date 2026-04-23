@@ -26,7 +26,7 @@ function logError(context, error) {
   }
 }
 
-module.exports = function registerComputerGameSocket(io) {
+module.exports = function registerComputerGameSocket(io, playerManager) {
   const computerNamespace = io.of("/computer-game");
 
   const gameRooms = new Map(); // gameId  -> ComputerGameRoom
@@ -344,6 +344,28 @@ module.exports = function registerComputerGameSocket(io) {
           gameRoom.playerTimers.clear();
           gameRoom.computerTimers.clear();
           gameRoom.computerAlreadyEmitted.clear();
+
+          // Update PlayerManager with new computer rating if rating changed
+          if (
+            result.ratingChange &&
+            result.ratingChange !== 0 &&
+            playerManager
+          ) {
+            const playerInMemory = playerManager.getPlayerById(playerId);
+
+            if (playerInMemory) {
+              // Update the computer rating in PlayerManager memory
+              if (!playerInMemory.pr) playerInMemory.pr = { computer: {} };
+              if (!playerInMemory.pr.computer) playerInMemory.pr.computer = {};
+
+              const levelKey = `level${gameRoom.computerLevel}`;
+              playerInMemory.pr.computer[levelKey] = result.ratingAfter;
+
+              console.log(
+                `🔄 [${gameRoom.id}] Updated PlayerManager computer rating for level ${gameRoom.computerLevel}: ${result.ratingBefore} → ${result.ratingAfter}`,
+              );
+            }
+          }
 
           socket.emit("gameEnded", { ...result, endReason });
           gameRooms.delete(gameRoom.id);

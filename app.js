@@ -58,8 +58,8 @@ app.use("/api", notificationRoutes);
 
 require("./controller/pvpController")(io);
 
-// ✅ Register Computer Mode Socket Namespace
-registerComputerGameSocket(io);
+// ✅ Register Computer Mode Socket Namespace with PlayerManager
+registerComputerGameSocket(io, app.locals.playerManager);
 
 // test route
 app.get("/", (req, res) => {
