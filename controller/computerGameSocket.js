@@ -277,12 +277,20 @@ module.exports = function registerComputerGameSocket(io) {
       try {
         if (!playerId) throw new Error("Player not authenticated");
 
-        const { computerLevel, gameMode, selectedSymbols } = gameData || {};
+        const { computerLevel, gameMode, selectedSymbols, diffCode } =
+          gameData || {};
 
         if (!computerLevel || computerLevel < 1 || computerLevel > 5)
           throw new Error("Invalid computer level (1-5)");
         if (!gameMode || !config.gameTiming[gameMode])
           throw new Error("Invalid game mode");
+        // diffCode is optional - if not provided, use original logic
+        const useFrontendDiffCode =
+          diffCode && ["E2", "E4", "M2", "M4", "H2", "H4"].includes(diffCode);
+        if (diffCode && !useFrontendDiffCode)
+          throw new Error(
+            "Invalid diffCode. Use one of: E2, E4, M2, M4, H2, H4",
+          );
         if (playerGames.has(playerId))
           throw new Error("Player already has an active game");
 
@@ -318,10 +326,13 @@ module.exports = function registerComputerGameSocket(io) {
           null,
         );
 
-        // Store selected symbols and symNum before initialize
-        // initialize() will derive the full diffCode (E2/M4 etc) once it knows the difficulty
+        // Store frontend's diffCode choice if provided
         gameRoom.selectedSymbols = symbols;
         gameRoom.symNum = symNum;
+        if (useFrontendDiffCode) {
+          gameRoom.diffCode = diffCode; // Use frontend's choice
+        }
+        // If not provided, ComputerGameRoom will use original calculation logic
 
         const initResult = await gameRoom.initialize(player);
 

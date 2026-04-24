@@ -96,49 +96,55 @@ class ComputerGameRoom {
     try {
       const levelKey = `level${this.computerLevel}`;
 
-      // Step 1: Determine diffCode based on selected symbols and current skill level
-      const symNum = this.symNum || "2";
-
-      // FIXED: Get the appropriate rating for the current symNum to determine difficulty
-      // This ensures we use the right rating bucket (E2/E4/M2/M4/H2/H4) based on symbol count
-      let seedRating;
-      if (symNum === "2") {
-        // For 2-symbol games, check player's current 2-symbol ratings to determine difficulty
-        const e2Rating = player.pr.computer[levelKey]["E2"] || 1000;
-        const m2Rating = player.pr.computer[levelKey]["M2"] || 1000;
-        const h2Rating = player.pr.computer[levelKey]["H2"] || 1000;
-
-        // Use the best 2-symbol rating to determine appropriate difficulty
-        seedRating = Math.max(e2Rating, m2Rating, h2Rating);
-      } else if (symNum === "4") {
-        // For 4-symbol games, check player's current 4-symbol ratings to determine difficulty
-        const e4Rating = player.pr.computer[levelKey]["E4"] || 1000;
-        const m4Rating = player.pr.computer[levelKey]["M4"] || 1000;
-        const h4Rating = player.pr.computer[levelKey]["H4"] || 1000;
-
-        // Use the best 4-symbol rating to determine appropriate difficulty
-        seedRating = Math.max(e4Rating, m4Rating, h4Rating);
+      // Check if frontend provided diffCode, otherwise use original calculation logic
+      if (this.diffCode) {
+        // Frontend specified diffCode - use it directly
+        this.playerRatingBefore =
+          player.pr.computer[levelKey][this.diffCode] || 1000;
       } else {
-        seedRating = 1000; // fallback
+        // Original logic: determine diffCode based on selected symbols and current skill level
+        const symNum = this.symNum || "2";
+
+        let seedRating;
+        if (symNum === "2") {
+          // For 2-symbol games, check player's current 2-symbol ratings to determine difficulty
+          const e2Rating = player.pr.computer[levelKey]["E2"] || 1000;
+          const m2Rating = player.pr.computer[levelKey]["M2"] || 1000;
+          const h2Rating = player.pr.computer[levelKey]["H2"] || 1000;
+          seedRating = Math.max(e2Rating, m2Rating, h2Rating);
+        } else if (symNum === "4") {
+          // For 4-symbol games, check player's current 4-symbol ratings to determine difficulty
+          const e4Rating = player.pr.computer[levelKey]["E4"] || 1000;
+          const m4Rating = player.pr.computer[levelKey]["M4"] || 1000;
+          const h4Rating = player.pr.computer[levelKey]["H4"] || 1000;
+          seedRating = Math.max(e4Rating, m4Rating, h4Rating);
+        } else {
+          seedRating = 1000; // fallback
+        }
+
+        const seedDifficulty = config.getDifficultyByRating(seedRating);
+        const diffLetter =
+          seedDifficulty === "easy"
+            ? "E"
+            : seedDifficulty === "hard"
+              ? "H"
+              : "M";
+
+        this.diffCode = `${diffLetter}${symNum}`;
+        this.playerRatingBefore =
+          player.pr.computer[levelKey][this.diffCode] || 1000;
       }
 
-      const seedDifficulty = config.getDifficultyByRating(seedRating);
-      const diffLetter =
-        seedDifficulty === "easy" ? "E" : seedDifficulty === "hard" ? "H" : "M";
-
-      // Step 2: Build diffCode and read the specific rating for this bucket
-      this.diffCode = `${diffLetter}${symNum}`;
-      this.playerRatingBefore =
-        player.pr.computer[levelKey][this.diffCode] || 1000;
-
-      // ✅ Step 3: Derive difficulty from this specific bucket's rating
+      // Step 3: Derive difficulty from this specific bucket's rating
       this.difficulty = config.getDifficultyByRating(this.playerRatingBefore);
 
       this.computerAIState = ComputerAI.initializeSession(this.computerLevel);
       this.gameState = "initialized";
 
+      const diffCodeSource =
+        this.diffCode && this.symNum !== undefined ? "Frontend" : "Calculated";
       console.log(
-        `✅ ComputerGameRoom initialized: ${this.id} | DiffCode: ${this.diffCode} | Rating: ${this.playerRatingBefore} | Difficulty: ${this.difficulty}`,
+        `✅ ComputerGameRoom initialized: ${this.id} | DiffCode: ${this.diffCode} (${diffCodeSource}) | Rating: ${this.playerRatingBefore} | Question Difficulty: ${this.difficulty}`,
       );
 
       return {
