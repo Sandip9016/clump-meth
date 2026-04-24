@@ -269,9 +269,12 @@ class BadgeService {
       if (!player) return earned;
 
       const practiceTotal =
-        (player.stats?.practice?.easy?.gamesPlayed || 0) +
-        (player.stats?.practice?.medium?.gamesPlayed || 0) +
-        (player.stats?.practice?.hard?.gamesPlayed || 0);
+        (player.stats?.practice?.E2?.gamesPlayed || 0) +
+        (player.stats?.practice?.E4?.gamesPlayed || 0) +
+        (player.stats?.practice?.M2?.gamesPlayed || 0) +
+        (player.stats?.practice?.M4?.gamesPlayed || 0) +
+        (player.stats?.practice?.H2?.gamesPlayed || 0) +
+        (player.stats?.practice?.H4?.gamesPlayed || 0);
 
       const overallTotal = player.stats?.overall?.totalGames || 0;
 
