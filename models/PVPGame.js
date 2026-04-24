@@ -101,10 +101,16 @@ const PVPGameSchema = new Schema({
     type: Number, // in seconds
     required: true,
   },
-  // ✅ NEW: Game difficulty level
+  // ✅ Game difficulty level
   difficulty: {
     type: String,
     enum: ["easy", "medium", "hard"],
+    required: true,
+  },
+  // ✅ Diff code (E2/E4/M2/M4/H2/H4)
+  diffCode: {
+    type: String,
+    enum: ["E2", "E4", "M2", "M4", "H2", "H4"],
     required: true,
   },
   // ✅ NEW: Game timer setting

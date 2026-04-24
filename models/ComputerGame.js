@@ -83,6 +83,12 @@ const ComputerGameSchema = new Schema({
     enum: ["easy", "medium", "hard"],
     required: true,
   },
+  // ✅ Diff code (E2/E4/M2/M4/H2/H4)
+  diffCode: {
+    type: String,
+    enum: ["E2", "E4", "M2", "M4", "H2", "H4"],
+    required: true,
+  },
   gameMode: {
     type: String,
     enum: ["1-minute", "2-minute", "3-minute"],

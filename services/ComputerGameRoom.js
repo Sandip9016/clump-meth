@@ -59,6 +59,10 @@ class ComputerGameRoom {
     this.difficulty = null;
     this.playerRatingBefore = null;
 
+    // ✅ Set by socket before initialize() is called
+    this.symNum = "2";   // "2" or "4" — derived from selectedSymbols.length
+    this.diffCode = null; // e.g. "M2", "E4" — derived in initialize()
+
     // Questions meter (shared like PvP)
     this.questionMeter = Math.max(
       5,
@@ -90,20 +94,35 @@ class ComputerGameRoom {
   // ─────────────────────────────────────────────────────────────────────────
   async initialize(player) {
     try {
-      this.playerRatingBefore =
-        player.pr.computer[`level${this.computerLevel}`];
+      const levelKey = `level${this.computerLevel}`;
+
+      // ✅ Step 1: Use symNum (set by socket) + a seed rating to get difficulty letter
+      // We use M2 as a neutral seed to determine the player's general difficulty tier
+      const symNum = this.symNum || "2";
+      const seedRating = player.pr.computer[levelKey]["M2"] || 1000;
+      const seedDifficulty = config.getDifficultyByRating(seedRating);
+      const diffLetter =
+        seedDifficulty === "easy" ? "E" : seedDifficulty === "hard" ? "H" : "M";
+
+      // ✅ Step 2: Build diffCode and read the specific rating for this bucket
+      this.diffCode = `${diffLetter}${symNum}`;
+      this.playerRatingBefore = player.pr.computer[levelKey][this.diffCode] || 1000;
+
+      // ✅ Step 3: Derive difficulty from this specific bucket's rating
       this.difficulty = config.getDifficultyByRating(this.playerRatingBefore);
+
       this.computerAIState = ComputerAI.initializeSession(this.computerLevel);
       this.gameState = "initialized";
 
       console.log(
-        `✅ ComputerGameRoom initialized: ${this.id} | Player Rating: ${this.playerRatingBefore} | Difficulty: ${this.difficulty}`,
+        `✅ ComputerGameRoom initialized: ${this.id} | DiffCode: ${this.diffCode} | Rating: ${this.playerRatingBefore} | Difficulty: ${this.difficulty}`,
       );
 
       return {
         gameId: this.id,
         playerRating: this.playerRatingBefore,
         difficulty: this.difficulty,
+        diffCode: this.diffCode,
         computerLevel: this.computerLevel,
         computerDisplayName: this.computerAIState.levelProfile.displayName,
       };
@@ -341,7 +360,7 @@ class ComputerGameRoom {
       const playerRatingAfter = this.playerRatingBefore + ratingChange;
 
       const levelKey = `level${this.computerLevel}`;
-      const levelStats = player.stats.computer[levelKey];
+      const levelStats = player.stats.computer[levelKey][this.diffCode];
 
       levelStats.gamesPlayed += 1;
       levelStats.totalScore += this.playerScore;
@@ -367,7 +386,7 @@ class ComputerGameRoom {
       );
       levelStats.averageScore = levelStats.totalScore / levelStats.gamesPlayed;
 
-      player.pr.computer[levelKey] = playerRatingAfter;
+      player.pr.computer[levelKey][this.diffCode] = playerRatingAfter;
       await player.save();
 
       const computerGame = new ComputerGame({
@@ -380,6 +399,7 @@ class ComputerGameRoom {
         winner,
         result,
         difficulty: this.difficulty,
+        diffCode: this.diffCode,
         gameMode: this.gameMode,
         gameDuration: gameDurationSeconds,
         questionHistory: this.questionHistory,

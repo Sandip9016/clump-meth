@@ -14,29 +14,26 @@ function calculatePracticePoints({
   return pointsA + bonus;
 }
 
+// ✅ Valid diffCodes for practice
+const VALID_DIFF_CODES = ["E2", "E4", "M2", "M4", "H2", "H4"];
+
 /**
  * POST /api/practice/end
- * Body: { difficulty, correctCount, incorrectCount, skippedCount }
+ * Body: { diffCode, correctCount, incorrectCount, skippedCount }
  */
 exports.endPracticeSession = async (req, res) => {
-  const { difficulty, correctCount, incorrectCount, skippedCount } = req.body;
+  const { diffCode, correctCount, incorrectCount, skippedCount } = req.body;
 
   const playerId = req.user._id;
   console.log(playerId);
 
-  // Accept both full names ("easy","medium","hard") and short codes ("E2","M4","H2" etc.)
-  const DIFF_MAP = {
-    easy: "easy", medium: "medium", hard: "hard",
-    e2: "easy", e4: "easy",
-    m2: "medium", m4: "medium",
-    h2: "hard", h4: "hard",
-  };
-  const normalizedDiff = DIFF_MAP[(difficulty || "").toLowerCase()];
+  // Normalize diffCode to uppercase (e.g. "m2" → "M2")
+  const normalizedDiffCode = (diffCode || "").toUpperCase();
 
   const total = correctCount + incorrectCount + skippedCount;
 
-  if (!playerId || !normalizedDiff) {
-    return res.status(400).json({ message: "Missing or invalid fields" });
+  if (!playerId || !VALID_DIFF_CODES.includes(normalizedDiffCode)) {
+    return res.status(400).json({ message: "Missing or invalid diffCode. Use one of: E2, E4, M2, M4, H2, H4" });
   }
 
   if (
@@ -55,16 +52,16 @@ exports.endPracticeSession = async (req, res) => {
     if (!player.pr) player.pr = { practice: {}, pvp: {} };
     if (!player.pr.practice) player.pr.practice = {};
 
-    // ✅ Increment stats.practice[normalizedDiff].gamesPlayed for badge tracking
-    if (!player.stats.practice[normalizedDiff]) {
-      player.stats.practice[normalizedDiff] = {
+    // ✅ Increment stats.practice[normalizedDiffCode].gamesPlayed for badge tracking
+    if (!player.stats.practice[normalizedDiffCode]) {
+      player.stats.practice[normalizedDiffCode] = {
         gamesPlayed: 0,
         highScore: 0,
         totalScore: 0,
         averageScore: 0,
       };
     }
-    player.stats.practice[normalizedDiff].gamesPlayed += 1;
+    player.stats.practice[normalizedDiffCode].gamesPlayed += 1;
     player.stats.overall.totalGames += 1;
     player.markModified("stats");
 
@@ -73,10 +70,10 @@ exports.endPracticeSession = async (req, res) => {
       skippedCount,
       incorrectCount,
     });
-    const currentRating = player.pr.practice[normalizedDiff];
+    const currentRating = player.pr.practice[normalizedDiffCode] || 1000;
     const newRating = currentRating + points;
 
-    player.pr.practice[normalizedDiff] = newRating;
+    player.pr.practice[normalizedDiffCode] = newRating;
     await player.save();
 
     // ✅ Badge checks — non-blocking
@@ -91,6 +88,7 @@ exports.endPracticeSession = async (req, res) => {
       pointsEarned: points,
       newRating: newRating,
       oldRating: currentRating,
+      diffCode: normalizedDiffCode,
       correctPercent: ((correctCount / total) * 100).toFixed(2) + "%",
       incorrectPercent: ((incorrectCount / total) * 100).toFixed(2) + "%",
       skippedPercent: ((skippedCount / total) * 100).toFixed(2) + "%",

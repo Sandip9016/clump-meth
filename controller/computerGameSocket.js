@@ -26,7 +26,7 @@ function logError(context, error) {
   }
 }
 
-module.exports = function registerComputerGameSocket(io, playerManager) {
+module.exports = function registerComputerGameSocket(io) {
   const computerNamespace = io.of("/computer-game");
 
   const gameRooms = new Map(); // gameId  -> ComputerGameRoom
@@ -304,8 +304,8 @@ module.exports = function registerComputerGameSocket(io, playerManager) {
         const player = await Player.findById(playerId);
         if (!player) throw new Error("Player not found");
 
-        const playerRating = player.pr.computer[`level${computerLevel}`];
-        const difficulty = config.getDifficultyByRating(playerRating);
+        // ✅ Derive symbol number from selectedSymbols count (2 or 4)
+        const symNum = symbols.length >= 4 ? "4" : "2";
 
         // Don't pre-load questions - generate them dynamically for endless mode
         const gameRoom = new ComputerGameRoom(
@@ -315,11 +315,13 @@ module.exports = function registerComputerGameSocket(io, playerManager) {
           [], // Empty questions array - will be generated dynamically
           questionService,
           io,
-          playerRating, // Pass player rating for question meter calculation
+          null,
         );
 
-        // Store selected symbols for question generation
+        // Store selected symbols and symNum before initialize
+        // initialize() will derive the full diffCode (E2/M4 etc) once it knows the difficulty
         gameRoom.selectedSymbols = symbols;
+        gameRoom.symNum = symNum;
 
         const initResult = await gameRoom.initialize(player);
 
@@ -344,28 +346,6 @@ module.exports = function registerComputerGameSocket(io, playerManager) {
           gameRoom.playerTimers.clear();
           gameRoom.computerTimers.clear();
           gameRoom.computerAlreadyEmitted.clear();
-
-          // Update PlayerManager with new computer rating if rating changed
-          if (
-            result.ratingChange &&
-            result.ratingChange !== 0 &&
-            playerManager
-          ) {
-            const playerInMemory = playerManager.getPlayerById(playerId);
-
-            if (playerInMemory) {
-              // Update the computer rating in PlayerManager memory
-              if (!playerInMemory.pr) playerInMemory.pr = { computer: {} };
-              if (!playerInMemory.pr.computer) playerInMemory.pr.computer = {};
-
-              const levelKey = `level${gameRoom.computerLevel}`;
-              playerInMemory.pr.computer[levelKey] = result.ratingAfter;
-
-              console.log(
-                `🔄 [${gameRoom.id}] Updated PlayerManager computer rating for level ${gameRoom.computerLevel}: ${result.ratingBefore} → ${result.ratingAfter}`,
-              );
-            }
-          }
 
           socket.emit("gameEnded", { ...result, endReason });
           gameRooms.delete(gameRoom.id);
@@ -396,7 +376,8 @@ module.exports = function registerComputerGameSocket(io, playerManager) {
             gameMode,
             computerLevel,
             computerDisplayName: initResult.computerDisplayName,
-            difficulty,
+            difficulty: initResult.difficulty,
+            diffCode: initResult.diffCode,
             selectedSymbols: symbols, // Echo back selected symbols
             question: firstPlayerQuestion
               ? {

@@ -160,13 +160,13 @@ module.exports = function registerSocketHandlers(io, app) {
                 username: opponent.username,
                 rating: opponent.rating,
                 stats: {
-                  wins: opponent.stats?.pvp?.[gameRoom.difficulty]?.wins || 0,
+                  wins: opponent.stats?.pvp?.[gameRoom.diffCode]?.wins || 0,
                   losses:
-                    opponent.stats?.pvp?.[gameRoom.difficulty]?.losses || 0,
+                    opponent.stats?.pvp?.[gameRoom.diffCode]?.losses || 0,
                   winRate:
-                    opponent.stats?.pvp?.[gameRoom.difficulty]?.winRate || 0,
+                    opponent.stats?.pvp?.[gameRoom.diffCode]?.winRate || 0,
                   currentStreak:
-                    opponent.stats?.pvp?.[gameRoom.difficulty]?.currentStreak ||
+                    opponent.stats?.pvp?.[gameRoom.diffCode]?.currentStreak ||
                     0,
                 },
               },

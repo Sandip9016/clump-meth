@@ -79,22 +79,63 @@ const playerSchema = new mongoose.Schema(
     // ✅ Personal Records / Ratings (ELO-style)
     pr: {
       practice: {
-        easy: { type: Number, default: 1000 },
-        medium: { type: Number, default: 1000 },
-        hard: { type: Number, default: 1000 },
+        E2: { type: Number, default: 1000 },
+        E4: { type: Number, default: 1000 },
+        M2: { type: Number, default: 1000 },
+        M4: { type: Number, default: 1000 },
+        H2: { type: Number, default: 1000 },
+        H4: { type: Number, default: 1000 },
       },
       pvp: {
-        easy: { type: Number, default: 1000 },
-        medium: { type: Number, default: 1000 },
-        hard: { type: Number, default: 1000 },
+        E2: { type: Number, default: 1000 },
+        E4: { type: Number, default: 1000 },
+        M2: { type: Number, default: 1000 },
+        M4: { type: Number, default: 1000 },
+        H2: { type: Number, default: 1000 },
+        H4: { type: Number, default: 1000 },
       },
-      // ✅ Computer Mode Ratings (by level 1-5)
+      // ✅ Computer Mode Ratings (by level + diffCode)
       computer: {
-        level1: { type: Number, default: 1000 },
-        level2: { type: Number, default: 1000 },
-        level3: { type: Number, default: 1000 },
-        level4: { type: Number, default: 1000 },
-        level5: { type: Number, default: 1000 },
+        level1: {
+          E2: { type: Number, default: 1000 },
+          E4: { type: Number, default: 1000 },
+          M2: { type: Number, default: 1000 },
+          M4: { type: Number, default: 1000 },
+          H2: { type: Number, default: 1000 },
+          H4: { type: Number, default: 1000 },
+        },
+        level2: {
+          E2: { type: Number, default: 1000 },
+          E4: { type: Number, default: 1000 },
+          M2: { type: Number, default: 1000 },
+          M4: { type: Number, default: 1000 },
+          H2: { type: Number, default: 1000 },
+          H4: { type: Number, default: 1000 },
+        },
+        level3: {
+          E2: { type: Number, default: 1000 },
+          E4: { type: Number, default: 1000 },
+          M2: { type: Number, default: 1000 },
+          M4: { type: Number, default: 1000 },
+          H2: { type: Number, default: 1000 },
+          H4: { type: Number, default: 1000 },
+        },
+        level4: {
+          E2: { type: Number, default: 1000 },
+          E4: { type: Number, default: 1000 },
+          M2: { type: Number, default: 1000 },
+          M4: { type: Number, default: 1000 },
+          H2: { type: Number, default: 1000 },
+          H4: { type: Number, default: 1000 },
+        },
+        level5: {
+          E2: { type: Number, default: 1000 },
+          E4: { type: Number, default: 1000 },
+          M2: { type: Number, default: 1000 },
+          M4: { type: Number, default: 1000 },
+          H2: { type: Number, default: 1000 },
+          H4: { type: Number, default: 1000 },
+        },
       },
     },
 
@@ -102,55 +143,22 @@ const playerSchema = new mongoose.Schema(
     stats: {
       // Practice Mode Stats
       practice: {
-        easy: {
-          gamesPlayed: { type: Number, default: 0 },
-          highScore: { type: Number, default: 0 },
-          totalScore: { type: Number, default: 0 },
-          averageScore: { type: Number, default: 0 },
-        },
-        medium: {
-          gamesPlayed: { type: Number, default: 0 },
-          highScore: { type: Number, default: 0 },
-          totalScore: { type: Number, default: 0 },
-          averageScore: { type: Number, default: 0 },
-        },
-        hard: {
-          gamesPlayed: { type: Number, default: 0 },
-          highScore: { type: Number, default: 0 },
-          totalScore: { type: Number, default: 0 },
-          averageScore: { type: Number, default: 0 },
-        },
+        E2: { gamesPlayed: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+        E4: { gamesPlayed: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+        M2: { gamesPlayed: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+        M4: { gamesPlayed: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+        H2: { gamesPlayed: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+        H4: { gamesPlayed: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
       },
 
       // PvP Mode Stats
       pvp: {
-        easy: {
-          gamesPlayed: { type: Number, default: 0 },
-          wins: { type: Number, default: 0 },
-          losses: { type: Number, default: 0 },
-          draws: { type: Number, default: 0 },
-          winRate: { type: Number, default: 0 }, // Percentage
-          currentStreak: { type: Number, default: 0 }, // Win streak
-          bestStreak: { type: Number, default: 0 },
-        },
-        medium: {
-          gamesPlayed: { type: Number, default: 0 },
-          wins: { type: Number, default: 0 },
-          losses: { type: Number, default: 0 },
-          draws: { type: Number, default: 0 },
-          winRate: { type: Number, default: 0 },
-          currentStreak: { type: Number, default: 0 },
-          bestStreak: { type: Number, default: 0 },
-        },
-        hard: {
-          gamesPlayed: { type: Number, default: 0 },
-          wins: { type: Number, default: 0 },
-          losses: { type: Number, default: 0 },
-          draws: { type: Number, default: 0 },
-          winRate: { type: Number, default: 0 },
-          currentStreak: { type: Number, default: 0 },
-          bestStreak: { type: Number, default: 0 },
-        },
+        E2: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 } },
+        E4: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 } },
+        M2: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 } },
+        M4: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 } },
+        H2: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 } },
+        H4: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 } },
       },
 
       // ✅ Overall Stats (all difficulties combined)
@@ -162,67 +170,47 @@ const playerSchema = new mongoose.Schema(
         overallWinRate: { type: Number, default: 0 },
       },
 
-      // ✅ Computer Mode Stats (by level 1-5)
+      // ✅ Computer Mode Stats (by level + diffCode)
       computer: {
         level1: {
-          gamesPlayed: { type: Number, default: 0 },
-          wins: { type: Number, default: 0 },
-          losses: { type: Number, default: 0 },
-          draws: { type: Number, default: 0 },
-          winRate: { type: Number, default: 0 },
-          currentStreak: { type: Number, default: 0 },
-          bestStreak: { type: Number, default: 0 },
-          totalScore: { type: Number, default: 0 },
-          highScore: { type: Number, default: 0 },
-          averageScore: { type: Number, default: 0 },
+          E2: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          E4: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          M2: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          M4: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          H2: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          H4: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
         },
         level2: {
-          gamesPlayed: { type: Number, default: 0 },
-          wins: { type: Number, default: 0 },
-          losses: { type: Number, default: 0 },
-          draws: { type: Number, default: 0 },
-          winRate: { type: Number, default: 0 },
-          currentStreak: { type: Number, default: 0 },
-          bestStreak: { type: Number, default: 0 },
-          totalScore: { type: Number, default: 0 },
-          highScore: { type: Number, default: 0 },
-          averageScore: { type: Number, default: 0 },
+          E2: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          E4: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          M2: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          M4: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          H2: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          H4: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
         },
         level3: {
-          gamesPlayed: { type: Number, default: 0 },
-          wins: { type: Number, default: 0 },
-          losses: { type: Number, default: 0 },
-          draws: { type: Number, default: 0 },
-          winRate: { type: Number, default: 0 },
-          currentStreak: { type: Number, default: 0 },
-          bestStreak: { type: Number, default: 0 },
-          totalScore: { type: Number, default: 0 },
-          highScore: { type: Number, default: 0 },
-          averageScore: { type: Number, default: 0 },
+          E2: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          E4: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          M2: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          M4: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          H2: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          H4: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
         },
         level4: {
-          gamesPlayed: { type: Number, default: 0 },
-          wins: { type: Number, default: 0 },
-          losses: { type: Number, default: 0 },
-          draws: { type: Number, default: 0 },
-          winRate: { type: Number, default: 0 },
-          currentStreak: { type: Number, default: 0 },
-          bestStreak: { type: Number, default: 0 },
-          totalScore: { type: Number, default: 0 },
-          highScore: { type: Number, default: 0 },
-          averageScore: { type: Number, default: 0 },
+          E2: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          E4: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          M2: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          M4: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          H2: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          H4: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
         },
         level5: {
-          gamesPlayed: { type: Number, default: 0 },
-          wins: { type: Number, default: 0 },
-          losses: { type: Number, default: 0 },
-          draws: { type: Number, default: 0 },
-          winRate: { type: Number, default: 0 },
-          currentStreak: { type: Number, default: 0 },
-          bestStreak: { type: Number, default: 0 },
-          totalScore: { type: Number, default: 0 },
-          highScore: { type: Number, default: 0 },
-          averageScore: { type: Number, default: 0 },
+          E2: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          E4: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          M2: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          M4: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          H2: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
+          H4: { gamesPlayed: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 }, winRate: { type: Number, default: 0 }, currentStreak: { type: Number, default: 0 }, bestStreak: { type: Number, default: 0 }, totalScore: { type: Number, default: 0 }, highScore: { type: Number, default: 0 }, averageScore: { type: Number, default: 0 } },
         },
       },
     },
@@ -314,8 +302,8 @@ playerSchema.methods.comparePassword = function (candidatePassword) {
 };
 
 // ✅ NEW: Update PvP stats after a game
-playerSchema.methods.updatePvPStats = function (difficulty, won, draw = false) {
-  const diffStats = this.stats.pvp[difficulty];
+playerSchema.methods.updatePvPStats = function (diffCode, won, draw = false) {
+  const diffStats = this.stats.pvp[diffCode];
 
   // Increment games played
   diffStats.gamesPlayed++;
@@ -362,8 +350,8 @@ playerSchema.methods.updatePvPStats = function (difficulty, won, draw = false) {
 };
 
 // ✅ NEW: Update practice stats after a game
-playerSchema.methods.updatePracticeStats = function (difficulty, score) {
-  const diffStats = this.stats.practice[difficulty];
+playerSchema.methods.updatePracticeStats = function (diffCode, score) {
+  const diffStats = this.stats.practice[diffCode];
 
   // Increment games played
   diffStats.gamesPlayed++;
@@ -426,11 +414,7 @@ playerSchema.methods.getProfileSummary = function () {
     },
     stats: {
       overall: this.stats.overall,
-      pvpByDifficulty: {
-        easy: this.stats.pvp.easy,
-        medium: this.stats.pvp.medium,
-        hard: this.stats.pvp.hard,
-      },
+      pvpByDiffCode: this.stats.pvp,
     },
     preferences: this.preferences,
     accountStatus: this.accountStatus.state,
@@ -448,21 +432,17 @@ playerSchema.methods.updateLastActive = function () {
 // VIRTUAL PROPERTIES
 // ================================
 
-// ✅ Virtual: Total PvP games played (all difficulties)
+// ✅ Virtual: Total PvP games played (all diffCodes)
 playerSchema.virtual("totalPvPGames").get(function () {
-  return (
-    this.stats.pvp.easy.gamesPlayed +
-    this.stats.pvp.medium.gamesPlayed +
-    this.stats.pvp.hard.gamesPlayed
+  return ["E2","E4","M2","M4","H2","H4"].reduce(
+    (sum, code) => sum + (this.stats.pvp[code]?.gamesPlayed || 0), 0
   );
 });
 
-// ✅ Virtual: Total practice games played (all difficulties)
+// ✅ Virtual: Total practice games played (all diffCodes)
 playerSchema.virtual("totalPracticeGames").get(function () {
-  return (
-    this.stats.practice.easy.gamesPlayed +
-    this.stats.practice.medium.gamesPlayed +
-    this.stats.practice.hard.gamesPlayed
+  return ["E2","E4","M2","M4","H2","H4"].reduce(
+    (sum, code) => sum + (this.stats.practice[code]?.gamesPlayed || 0), 0
   );
 });
 
@@ -515,9 +495,12 @@ playerSchema.statics.getGlobalStats = async function () {
         totalGames: { $sum: "$stats.overall.totalGames" },
         totalWins: { $sum: "$stats.overall.totalWins" },
         totalLosses: { $sum: "$stats.overall.totalLosses" },
-        avgRatingEasy: { $avg: "$pr.pvp.easy" },
-        avgRatingMedium: { $avg: "$pr.pvp.medium" },
-        avgRatingHard: { $avg: "$pr.pvp.hard" },
+        avgRatingE2: { $avg: "$pr.pvp.E2" },
+        avgRatingM2: { $avg: "$pr.pvp.M2" },
+        avgRatingH2: { $avg: "$pr.pvp.H2" },
+        avgRatingE4: { $avg: "$pr.pvp.E4" },
+        avgRatingM4: { $avg: "$pr.pvp.M4" },
+        avgRatingH4: { $avg: "$pr.pvp.H4" },
       },
     },
   ]);
@@ -538,9 +521,12 @@ playerSchema.index(
   { unique: true, collation: { locale: "en", strength: 2 } },
 );
 playerSchema.index({ email: 1 });
-playerSchema.index({ "pr.pvp.easy": -1 });
-playerSchema.index({ "pr.pvp.medium": -1 });
-playerSchema.index({ "pr.pvp.hard": -1 });
+playerSchema.index({ "pr.pvp.E2": -1 });
+playerSchema.index({ "pr.pvp.E4": -1 });
+playerSchema.index({ "pr.pvp.M2": -1 });
+playerSchema.index({ "pr.pvp.M4": -1 });
+playerSchema.index({ "pr.pvp.H2": -1 });
+playerSchema.index({ "pr.pvp.H4": -1 });
 playerSchema.index({ "accountStatus.state": 1 });
 playerSchema.index({ "accountStatus.lastActiveAt": -1 });
 

@@ -6,12 +6,12 @@ const badgeService = require("./BadgeService");
    DATABASE HELPERS (PLAYER ID)
 ================================ */
 
-async function updatePlayerRatingInDatabase(playerId, delta, diff) {
+async function updatePlayerRatingInDatabase(playerId, delta, diffCode) {
   try {
     const player = await Player.findById(playerId);
     if (!player) throw new Error(`Player not found: ${playerId}`);
 
-    player.pr.pvp[diff] += delta;
+    player.pr.pvp[diffCode] += delta;
     await player.save();
 
     return player;
@@ -31,6 +31,7 @@ async function savePVPGameToDatabase(gameData) {
       gameDuration,
       disconnectedPlayerId,
       difficulty,
+      diffCode,
       timer,
       questionHistory,
       emojiHistory,
@@ -68,6 +69,7 @@ async function savePVPGameToDatabase(gameData) {
       disconnectedPlayerId: disconnectedPlayerId || null,
       gameDuration: Math.floor(gameDuration / 1000),
       difficulty: difficulty || "medium",
+      diffCode: diffCode || "M2",
       timer: timer || 60,
       questionHistory: questionHistory || [],
       emojiHistory: emojiHistory || [],
@@ -398,7 +400,7 @@ class GameRoom {
         try {
           const won = playerResult.playerId === remainingPlayer.id;
           const p = await Player.findById(playerResult.playerId);
-          if (p) await p.updatePvPStats(this.difficulty, won);
+          if (p) await p.updatePvPStats(this.diffCode, won);
           await badgeService.onPvPGameCompleted(playerResult.playerId);
         } catch (err) {
           console.error(
@@ -825,7 +827,7 @@ class GameRoom {
       gameResults.players.map(async (playerResult) => {
         try {
           const p = await Player.findById(playerResult.playerId);
-          if (p) await p.updatePvPStats(this.difficulty, playerResult.won);
+          if (p) await p.updatePvPStats(this.diffCode, playerResult.won);
           // badges run after stats are saved — no stale read
           await badgeService.onPvPGameCompleted(playerResult.playerId);
         } catch (err) {
@@ -893,6 +895,7 @@ class GameRoom {
       gameDuration: gameResults.gameStats.duration,
       disconnectedPlayerId: this.disconnectedPlayerId,
       difficulty: this.difficulty,
+      diffCode: this.diffCode,
       timer: this.players[0].timer,
       questionHistory: this.detailedQuestionHistory,
       emojiHistory: this.emojiHistory,
@@ -909,7 +912,7 @@ class GameRoom {
     const changes = [];
     for (const p of playerResults) {
       const delta = p.playerId === winnerId ? +5 : -5;
-      await updatePlayerRatingInDatabase(p.playerId, delta, this.difficulty);
+      await updatePlayerRatingInDatabase(p.playerId, delta, this.diffCode);
       changes.push(delta);
     }
     return changes;
@@ -920,7 +923,7 @@ class GameRoom {
 
     for (const p of playerResults) {
       let delta = p.playerId === winner.playerId ? +5 : -5;
-      await updatePlayerRatingInDatabase(p.playerId, delta, this.difficulty);
+      await updatePlayerRatingInDatabase(p.playerId, delta, this.diffCode);
       changes.push(delta);
     }
 
