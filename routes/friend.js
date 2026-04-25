@@ -8,9 +8,6 @@ const {
   myFriendList,
   userList,
   friendRequestList,
-  deleteFriendship,
-  deleteFriendshipByUser,
-  deleteAllFriendship,
 } = require("../controller/friend");
 const router = express.Router();
 
