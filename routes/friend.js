@@ -20,9 +20,4 @@ router.get("/my-friend-list", auth, myFriendList);
 router.get("/alluser-list", auth, userList);
 router.get("/friend-request", auth, friendRequestList);
 
-router.delete("/deleteFriendShipByUser", auth, deleteFriendshipByUser);
-
-router.delete("/delete-friend-request/:friendshipId", auth, deleteFriendship);
-router.delete("/delete-sab-frndreq", deleteAllFriendship);
-
 module.exports = router;

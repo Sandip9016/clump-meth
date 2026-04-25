@@ -224,9 +224,12 @@ class BadgeService {
       if (!player) return earned;
 
       const pvpTotal =
-        (player.stats?.pvp?.easy?.gamesPlayed || 0) +
-        (player.stats?.pvp?.medium?.gamesPlayed || 0) +
-        (player.stats?.pvp?.hard?.gamesPlayed || 0);
+        (player.stats?.pvp?.E2?.gamesPlayed || 0) +
+        (player.stats?.pvp?.E4?.gamesPlayed || 0) +
+        (player.stats?.pvp?.M2?.gamesPlayed || 0) +
+        (player.stats?.pvp?.M4?.gamesPlayed || 0) +
+        (player.stats?.pvp?.H2?.gamesPlayed || 0) +
+        (player.stats?.pvp?.H4?.gamesPlayed || 0);
 
       const overallTotal = player.stats?.overall?.totalGames || 0;
 
