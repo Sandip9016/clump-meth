@@ -450,11 +450,36 @@ class ComputerGameRoom {
       try {
         const cs = player.stats.computer;
         const computerGamesPlayed =
-          (cs.level1.gamesPlayed || 0) +
-          (cs.level2.gamesPlayed || 0) +
-          (cs.level3.gamesPlayed || 0) +
-          (cs.level4.gamesPlayed || 0) +
-          (cs.level5.gamesPlayed || 0);
+          (cs.level1?.E2?.gamesPlayed || 0) +
+          (cs.level1?.E4?.gamesPlayed || 0) +
+          (cs.level1?.M2?.gamesPlayed || 0) +
+          (cs.level1?.M4?.gamesPlayed || 0) +
+          (cs.level1?.H2?.gamesPlayed || 0) +
+          (cs.level1?.H4?.gamesPlayed || 0) +
+          (cs.level2?.E2?.gamesPlayed || 0) +
+          (cs.level2?.E4?.gamesPlayed || 0) +
+          (cs.level2?.M2?.gamesPlayed || 0) +
+          (cs.level2?.M4?.gamesPlayed || 0) +
+          (cs.level2?.H2?.gamesPlayed || 0) +
+          (cs.level2?.H4?.gamesPlayed || 0) +
+          (cs.level3?.E2?.gamesPlayed || 0) +
+          (cs.level3?.E4?.gamesPlayed || 0) +
+          (cs.level3?.M2?.gamesPlayed || 0) +
+          (cs.level3?.M4?.gamesPlayed || 0) +
+          (cs.level3?.H2?.gamesPlayed || 0) +
+          (cs.level3?.H4?.gamesPlayed || 0) +
+          (cs.level4?.E2?.gamesPlayed || 0) +
+          (cs.level4?.E4?.gamesPlayed || 0) +
+          (cs.level4?.M2?.gamesPlayed || 0) +
+          (cs.level4?.M4?.gamesPlayed || 0) +
+          (cs.level4?.H2?.gamesPlayed || 0) +
+          (cs.level4?.H4?.gamesPlayed || 0) +
+          (cs.level5?.E2?.gamesPlayed || 0) +
+          (cs.level5?.E4?.gamesPlayed || 0) +
+          (cs.level5?.M2?.gamesPlayed || 0) +
+          (cs.level5?.M4?.gamesPlayed || 0) +
+          (cs.level5?.H2?.gamesPlayed || 0) +
+          (cs.level5?.H4?.gamesPlayed || 0);
         const overallGamesPlayed =
           (player.stats.overall.totalGames || 0) + computerGamesPlayed;
         await badgeService.onComputerGameCompleted(
