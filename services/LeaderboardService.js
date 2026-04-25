@@ -7,7 +7,7 @@ class LeaderboardService {
    * Get global leaderboard for PvP mode
    * @param {string} diffCode - E2, E4, M2, M4, H2, H4
    * @param {string} currentUserId - Current player's ID
-   * @param {number} limit - Number of players to return (default 10)
+   * @param {number} limit - Number of top players to return (default 10)
    */
   static async getGlobalLeaderboard(diffCode, currentUserId, limit = 10) {
     // Validate inputs first (synchronously)
@@ -35,17 +35,17 @@ class LeaderboardService {
     }
 
     try {
-      // Get all active players sorted by PvP rating with tie-breaking
+      // Get all active players sorted by selected diffCode PvP rating with tie-breaking
       const allPlayers = await Player.find({ "accountStatus.state": "active" })
         .sort({
-          [`pr.pvp.${diffCode}`]: -1, // Primary: rating (descending)
+          [`pr.pvp.${diffCode}`]: -1, // Primary: rating (descending) for selected diffCode
           username: 1, // Secondary: alphabetical
           _id: 1, // Tertiary: MongoDB ID
         })
         .select("username profileImage country pr.pvp pr.stats")
         .lean();
 
-      // Add ranks and find current player
+      // Add ranks based on selected diffCode rating
       const leaderBoard = allPlayers.map((player, index) => ({
         rank: index + 1,
         userId: player._id,
@@ -59,21 +59,23 @@ class LeaderboardService {
         isCurrentPlayer: player._id.toString() === currentUserId.toString(),
       }));
 
-      // Find current player
+      // Find current player index (0-based) and object
       const currentPlayerIndex = leaderBoard.findIndex(
         (p) => p.isCurrentPlayer,
       );
       const currentPlayer =
         currentPlayerIndex !== -1 ? leaderBoard[currentPlayerIndex] : null;
 
-      // Get top 10 players
-      const topPlayers = leaderBoard.slice(0, Math.min(limit, 10));
+      // Get top N players (capped at 10)
+      const topLimit = Math.min(limit, 10);
+      const topPlayers = leaderBoard.slice(0, topLimit);
 
-      // Get players around current player (only if not in top 10)
+      // Get players BELOW current player (only if current player is not in top 10)
       let aroundPlayers = [];
-      if (currentPlayer && currentPlayer.rank > 10) {
-        const startIdx = currentPlayer.rank; // Start from next player after current
-        const endIdx = Math.min(startIdx + limit, leaderBoard.length);
+      if (currentPlayer && currentPlayer.rank > topLimit) {
+        // currentPlayerIndex is 0-based, so currentPlayerIndex + 1 is the next player after them
+        const startIdx = currentPlayerIndex + 1;
+        const endIdx = Math.min(startIdx + 10, leaderBoard.length);
         aroundPlayers = leaderBoard.slice(startIdx, endIdx);
       }
 
@@ -98,7 +100,7 @@ class LeaderboardService {
    * @param {string} diffCode - E2, E4, M2, M4, H2, H4
    * @param {string} currentUserId - Current player's ID
    * @param {string} countryCode - Country code (optional, will use current player's country)
-   * @param {number} limit - Number of players to return (default 10)
+   * @param {number} limit - Number of top players to return (default 10)
    */
   static async getCountryLeaderboard(
     diffCode,
@@ -148,20 +150,20 @@ class LeaderboardService {
         };
       }
 
-      // Get all active players from the same country
+      // Get all active players from the same country sorted by selected diffCode rating
       const allPlayers = await Player.find({
         "accountStatus.state": "active",
         country: countryCode,
       })
         .sort({
-          [`pr.pvp.${diffCode}`]: -1, // Primary: rating (descending)
+          [`pr.pvp.${diffCode}`]: -1, // Primary: rating (descending) for selected diffCode
           username: 1, // Secondary: alphabetical
           _id: 1, // Tertiary: MongoDB ID
         })
         .select("username profileImage country pr.pvp pr.stats")
         .lean();
 
-      // Add ranks and find current player
+      // Add ranks based on selected diffCode rating
       const leaderBoard = allPlayers.map((player, index) => ({
         rank: index + 1,
         userId: player._id,
@@ -175,21 +177,23 @@ class LeaderboardService {
         isCurrentPlayer: player._id.toString() === currentUserId.toString(),
       }));
 
-      // Find current player
+      // Find current player index (0-based) and object
       const currentPlayerIndex = leaderBoard.findIndex(
         (p) => p.isCurrentPlayer,
       );
       const currentPlayer =
         currentPlayerIndex !== -1 ? leaderBoard[currentPlayerIndex] : null;
 
-      // Get top 10 players
-      const topPlayers = leaderBoard.slice(0, Math.min(limit, 10));
+      // Get top N players (capped at 10)
+      const topLimit = Math.min(limit, 10);
+      const topPlayers = leaderBoard.slice(0, topLimit);
 
-      // Get players around current player (only if not in top 10)
+      // Get players BELOW current player (only if current player is not in top 10)
       let aroundPlayers = [];
-      if (currentPlayer && currentPlayer.rank > 10) {
-        const startIdx = currentPlayer.rank; // Start from next player after current
-        const endIdx = Math.min(startIdx + limit, leaderBoard.length);
+      if (currentPlayer && currentPlayer.rank > topLimit) {
+        // currentPlayerIndex is 0-based, so currentPlayerIndex + 1 is the next player after them
+        const startIdx = currentPlayerIndex + 1;
+        const endIdx = Math.min(startIdx + 10, leaderBoard.length);
         aroundPlayers = leaderBoard.slice(startIdx, endIdx);
       }
 
@@ -236,7 +240,7 @@ class LeaderboardService {
         );
       }
 
-      // Get all friendships for current user
+      // Get all accepted friendships for current user
       const friendships = await Friend.find({
         $or: [
           { requester: currentUserId, status: "accepted" },
@@ -251,23 +255,23 @@ class LeaderboardService {
           : f.requester.toString(),
       );
 
-      // Add current user to the list for ranking
+      // Add current user to the pool for ranking
       friendIds.push(currentUserId.toString());
 
-      // Get all friends (including current user) sorted by PvP rating
+      // Get all friends + current user sorted by selected diffCode PvP rating
       const allPlayers = await Player.find({
         _id: { $in: friendIds },
         "accountStatus.state": "active",
       })
         .sort({
-          [`pr.pvp.${diffCode}`]: -1, // Primary: rating (descending)
+          [`pr.pvp.${diffCode}`]: -1, // Primary: rating (descending) for selected diffCode
           username: 1, // Secondary: alphabetical
           _id: 1, // Tertiary: MongoDB ID
         })
         .select("username profileImage country pr.pvp pr.stats")
         .lean();
 
-      // Add ranks and find current player
+      // Add ranks based on selected diffCode rating
       const leaderBoard = allPlayers.map((player, index) => ({
         rank: index + 1,
         userId: player._id,
@@ -282,7 +286,7 @@ class LeaderboardService {
         isFriend: player._id.toString() !== currentUserId.toString(),
       }));
 
-      // Separate friends and current player
+      // Separate friends list and current player
       const friends = leaderBoard.filter((p) => !p.isCurrentPlayer);
       const currentPlayer = leaderBoard.find((p) => p.isCurrentPlayer) || null;
 
@@ -290,8 +294,8 @@ class LeaderboardService {
         success: true,
         diffCode,
         leaderboard: {
-          friends: friends,
-          currentPlayer: currentPlayer,
+          friends: friends, // All friends ranked by selected diffCode rating
+          currentPlayer: currentPlayer, // Player's own rank among friends+self
         },
         totalCount: friends.length,
       };
