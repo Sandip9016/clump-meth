@@ -15,6 +15,7 @@ const friendRoutes = require("./routes/friend");
 const adminRoutes = require("./routes/admin");
 const notificationRoutes = require("./routes/notification");
 const computerGameRoutes = require("./routes/computerGame");
+const leaderboardRoutes = require("./routes/leaderboard");
 const notificationScheduler = require("./cronJobs/notification");
 
 // ✅ Import badge socket handler and badge service
@@ -54,6 +55,7 @@ app.use("/api/friend", friendRoutes);
 app.use("/api/match", matchRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/computer-game", computerGameRoutes);
+app.use("/api/leaderboard", leaderboardRoutes);
 app.use("/api", notificationRoutes);
 
 require("./controller/pvpController")(io);

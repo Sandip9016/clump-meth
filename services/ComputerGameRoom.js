@@ -416,6 +416,9 @@ class ComputerGameRoom {
       levelStats.averageScore = levelStats.totalScore / levelStats.gamesPlayed;
 
       player.pr.computer[levelKey][this.diffCode] = playerRatingAfter;
+      console.log(
+        `[endGame] Rating updated | level=${levelKey} | diffCode=${this.diffCode} | ${this.playerRatingBefore} → ${playerRatingAfter} (change: ${ratingChange > 0 ? "+" : ""}${ratingChange}) | result=${result}`,
+      );
       await player.save();
 
       const computerGame = new ComputerGame({

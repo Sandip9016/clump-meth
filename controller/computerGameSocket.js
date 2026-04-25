@@ -279,6 +279,9 @@ module.exports = function registerComputerGameSocket(io) {
 
         const { computerLevel, gameMode, selectedSymbols, diffCode } =
           gameData || {};
+        console.log(
+          `[startGame] computerLevel=${computerLevel} | gameMode=${gameMode} | selectedSymbols=${JSON.stringify(selectedSymbols)} | diffCode=${diffCode || "not sent (auto-detect)"}`,
+        );
 
         if (!computerLevel || computerLevel < 1 || computerLevel > 5)
           throw new Error("Invalid computer level (1-5)");
