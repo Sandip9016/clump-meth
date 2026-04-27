@@ -7,10 +7,10 @@ const Player = require("../models/Player");
 // Computer level display map
 const COMPUTER_LEVEL_MAP = {
   1: { name: "Beginner", label: "L1", tagline: "Everyone starts somewhere" },
-  2: { name: "Amateur",  label: "L2", tagline: "Rising through the ranks"  },
-  3: { name: "Skilled",  label: "L3", tagline: "Bring your A-game"         },
-  4: { name: "Expert",   label: "L4", tagline: "Think fast. Very fast"      },
-  5: { name: "Pro",      label: "L5", tagline: "Beat me if you can"         },
+  2: { name: "Amateur", label: "L2", tagline: "Rising through the ranks" },
+  3: { name: "Skilled", label: "L3", tagline: "Bring your A-game" },
+  4: { name: "Expert", label: "L4", tagline: "Think fast. Very fast" },
+  5: { name: "Pro", label: "L5", tagline: "Beat me if you can" },
 };
 
 /**
@@ -29,7 +29,7 @@ function parseMonthFilter(month) {
   const [yr, mo] = month.split("-").map(Number);
   return {
     start: new Date(yr, mo - 1, 1),
-    end:   new Date(yr, mo, 1),
+    end: new Date(yr, mo, 1),
   };
 }
 
@@ -37,16 +37,43 @@ function parseMonthFilter(month) {
  * Format a PVP game for the history table row
  */
 function formatPVPRow(game, myId) {
+  // Handle deleted players (null references)
+  if (!game.player1 || !game.player2) {
+    return {
+      gameId: game._id,
+      gameMode: game.isFriendMatch ? "friend" : "pvp",
+      gameType: game.diffCode,
+      opponent: null,
+      myScore: game.player1 ? game.scorePlayer1 : game.scorePlayer2,
+      oppScore: game.player1 ? game.scorePlayer2 : game.scorePlayer1,
+      outcome: "unknown",
+      myRatingAtMatch: game.player1
+        ? game.ratingBeforePlayer1
+        : game.ratingBeforePlayer2,
+      ratingChange: game.player1
+        ? game.ratingChangePlayer1
+        : game.ratingChangePlayer2,
+      playedAt: game.playedAt,
+      analysisAvailable: false,
+    };
+  }
+
   const isPlayer1 = game.player1._id
     ? game.player1._id.toString() === myId
     : game.player1.toString() === myId;
 
-  const opponent     = isPlayer1 ? game.player2 : game.player1;
-  const myScore      = isPlayer1 ? game.scorePlayer1 : game.scorePlayer2;
-  const oppScore     = isPlayer1 ? game.scorePlayer2 : game.scorePlayer1;
-  const ratingChange    = isPlayer1 ? game.ratingChangePlayer1 : game.ratingChangePlayer2;
-  const ratingBefore    = isPlayer1 ? game.ratingBeforePlayer1 : game.ratingBeforePlayer2;
-  const oppRatingBefore = isPlayer1 ? game.ratingBeforePlayer2 : game.ratingBeforePlayer1;
+  const opponent = isPlayer1 ? game.player2 : game.player1;
+  const myScore = isPlayer1 ? game.scorePlayer1 : game.scorePlayer2;
+  const oppScore = isPlayer1 ? game.scorePlayer2 : game.scorePlayer1;
+  const ratingChange = isPlayer1
+    ? game.ratingChangePlayer1
+    : game.ratingChangePlayer2;
+  const ratingBefore = isPlayer1
+    ? game.ratingBeforePlayer1
+    : game.ratingBeforePlayer2;
+  const oppRatingBefore = isPlayer1
+    ? game.ratingBeforePlayer2
+    : game.ratingBeforePlayer1;
 
   let outcome = "draw";
   if (game.result === "Draw") outcome = "draw";
@@ -60,13 +87,13 @@ function formatPVPRow(game, myId) {
   }
 
   return {
-    gameId:   game._id,
+    gameId: game._id,
     gameMode: game.isFriendMatch ? "friend" : "pvp",
-    gameType: game.diffCode,                  // E2 / E4 / M2 / M4 / H2 / H4
+    gameType: game.diffCode, // E2 / E4 / M2 / M4 / H2 / H4
     opponent: opponent
       ? {
-          id:           opponent._id,
-          username:     opponent.username,
+          id: opponent._id,
+          username: opponent.username,
           profileImage: opponent.profileImage || null,
           ratingAtMatch: oppRatingBefore || null,
         }
@@ -77,7 +104,7 @@ function formatPVPRow(game, myId) {
     myRatingAtMatch: ratingBefore || null,
     ratingChange,
     playedAt: game.playedAt,
-    analysisAvailable: false,  // coming soon
+    analysisAvailable: false, // coming soon
   };
 }
 
@@ -85,30 +112,31 @@ function formatPVPRow(game, myId) {
  * Format a Computer game for the history table row
  */
 function formatComputerRow(game) {
-  const levelInfo = COMPUTER_LEVEL_MAP[game.computerLevel] || COMPUTER_LEVEL_MAP[1];
+  const levelInfo =
+    COMPUTER_LEVEL_MAP[game.computerLevel] || COMPUTER_LEVEL_MAP[1];
 
   let outcome = "draw";
   if (game.result === "PlayerWon") outcome = "win";
   else if (game.result === "ComputerWon") outcome = "loss";
 
   return {
-    gameId:   game._id,
+    gameId: game._id,
     gameMode: "computer",
     gameType: game.diffCode,
     computer: {
-      level:   game.computerLevel,
-      label:   levelInfo.label,
-      name:    levelInfo.name,
+      level: game.computerLevel,
+      label: levelInfo.label,
+      name: levelInfo.name,
       tagline: levelInfo.tagline,
     },
-    myScore:           game.playerScore,
-    oppScore:          game.computerScore,
+    myScore: game.playerScore,
+    oppScore: game.computerScore,
     outcome,
-    ratingChange:      game.playerRatingChange,
-    ratingBefore:      game.playerRatingBefore,
-    ratingAfter:       game.playerRatingAfter,
-    playedAt:          game.playedAt,
-    analysisAvailable: false,  // coming soon
+    ratingChange: game.playerRatingChange,
+    ratingBefore: game.playerRatingBefore,
+    ratingAfter: game.playerRatingAfter,
+    playedAt: game.playedAt,
+    analysisAvailable: false, // coming soon
   };
 }
 
@@ -118,20 +146,20 @@ function formatComputerRow(game) {
 function formatPracticeRow(game) {
   // Practice has no opponent and no win/loss — show score as outcome indicator
   return {
-    gameId:            game._id,
-    gameMode:          "practice",
-    gameType:          game.diffCode,
-    correctCount:      game.correctCount,
-    incorrectCount:    game.incorrectCount,
-    skippedCount:      game.skippedCount,
-    totalQuestions:    game.totalQuestions,
-    pointsEarned:      game.pointsEarned,
-    ratingChange:      game.ratingChange,
-    ratingBefore:      game.ratingBefore,
-    ratingAfter:       game.ratingAfter,
-    outcome:           game.pointsEarned >= 0 ? "win" : "loss",  // positive points = green
-    playedAt:          game.playedAt,
-    analysisAvailable: false,  // coming soon
+    gameId: game._id,
+    gameMode: "practice",
+    gameType: game.diffCode,
+    correctCount: game.correctCount,
+    incorrectCount: game.incorrectCount,
+    skippedCount: game.skippedCount,
+    totalQuestions: game.totalQuestions,
+    pointsEarned: game.pointsEarned,
+    ratingChange: game.ratingChange,
+    ratingBefore: game.ratingBefore,
+    ratingAfter: game.ratingAfter,
+    outcome: game.pointsEarned >= 0 ? "win" : "loss", // positive points = green
+    playedAt: game.playedAt,
+    analysisAvailable: false, // coming soon
   };
 }
 
@@ -142,14 +170,15 @@ function formatPracticeRow(game) {
 ───────────────────────────────────────────────────────────── */
 exports.getHistoryFeed = async (req, res) => {
   try {
-    const myId  = req.user._id.toString();
+    const myId = req.user._id.toString();
     const limit = parseInt(req.query.limit) || 20;
-    const skip  = parseInt(req.query.skip)  || 0;
+    const skip = parseInt(req.query.skip) || 0;
 
     let dateFilter = {};
     try {
       const range = parseMonthFilter(req.query.month);
-      if (range) dateFilter = { playedAt: { $gte: range.start, $lt: range.end } };
+      if (range)
+        dateFilter = { playedAt: { $gte: range.start, $lt: range.end } };
     } catch (e) {
       return res.status(400).json({ success: false, message: e.message });
     }
@@ -175,21 +204,21 @@ exports.getHistoryFeed = async (req, res) => {
     ]);
 
     // Format each
-    const pvpRows      = pvpGames.map((g) => formatPVPRow(g, myId));
+    const pvpRows = pvpGames.map((g) => formatPVPRow(g, myId));
     const computerRows = computerGames.map(formatComputerRow);
     const practiceRows = practiceGames.map(formatPracticeRow);
 
     // Merge & sort by playedAt desc
     const allRows = [...pvpRows, ...computerRows, ...practiceRows].sort(
-      (a, b) => new Date(b.playedAt) - new Date(a.playedAt)
+      (a, b) => new Date(b.playedAt) - new Date(a.playedAt),
     );
 
-    const total   = allRows.length;
+    const total = allRows.length;
     const paginated = allRows.slice(skip, skip + limit);
 
     return res.json({
       success: true,
-      games:   paginated,
+      games: paginated,
       total,
       limit,
       skip,
@@ -207,14 +236,15 @@ exports.getHistoryFeed = async (req, res) => {
 ───────────────────────────────────────────────────────────── */
 exports.getPVPHistory = async (req, res) => {
   try {
-    const myId   = req.user._id.toString();
-    const limit  = parseInt(req.query.limit) || 20;
-    const skip   = parseInt(req.query.skip)  || 0;
+    const myId = req.user._id.toString();
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = parseInt(req.query.skip) || 0;
 
     let dateFilter = {};
     try {
       const range = parseMonthFilter(req.query.month);
-      if (range) dateFilter = { playedAt: { $gte: range.start, $lt: range.end } };
+      if (range)
+        dateFilter = { playedAt: { $gte: range.start, $lt: range.end } };
     } catch (e) {
       return res.status(400).json({ success: false, message: e.message });
     }
@@ -237,7 +267,7 @@ exports.getPVPHistory = async (req, res) => {
 
     return res.json({
       success: true,
-      games:   games.map((g) => formatPVPRow(g, myId)),
+      games: games.map((g) => formatPVPRow(g, myId)),
       total,
       limit,
       skip,
@@ -256,12 +286,14 @@ exports.getPVPHistory = async (req, res) => {
 exports.getComputerHistory = async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 20;
-    const skip  = parseInt(req.query.skip)  || 0;
+    const skip = parseInt(req.query.skip) || 0;
     const level = req.query.level ? parseInt(req.query.level) : null;
 
     // Validate level
     if (level !== null && (isNaN(level) || level < 1 || level > 5)) {
-      return res.status(400).json({ success: false, message: "Invalid level. Use 1–5." });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid level. Use 1–5." });
     }
 
     let filter = { player: req.user._id };
@@ -283,7 +315,7 @@ exports.getComputerHistory = async (req, res) => {
 
     return res.json({
       success: true,
-      games:   games.map(formatComputerRow),
+      games: games.map(formatComputerRow),
       total,
       limit,
       skip,
@@ -302,7 +334,7 @@ exports.getComputerHistory = async (req, res) => {
 exports.getPracticeHistory = async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 20;
-    const skip  = parseInt(req.query.skip)  || 0;
+    const skip = parseInt(req.query.skip) || 0;
 
     let filter = { player: req.user._id };
     try {
@@ -321,7 +353,7 @@ exports.getPracticeHistory = async (req, res) => {
 
     return res.json({
       success: true,
-      games:   games.map(formatPracticeRow),
+      games: games.map(formatPracticeRow),
       total,
       limit,
       skip,
@@ -339,12 +371,14 @@ exports.getPracticeHistory = async (req, res) => {
 ───────────────────────────────────────────────────────────── */
 exports.getGameDetail = async (req, res) => {
   try {
-    const myId     = req.user._id.toString();
+    const myId = req.user._id.toString();
     const { gameMode, gameId } = req.params;
 
     // Validate gameId is a valid MongoDB ObjectId
     if (!/^[a-f\d]{24}$/i.test(gameId)) {
-      return res.status(400).json({ success: false, message: "Invalid gameId format." });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid gameId format." });
     }
     let formatted = null;
 
@@ -356,6 +390,13 @@ exports.getGameDetail = async (req, res) => {
 
       if (!game) return res.status(404).json({ message: "Game not found" });
 
+      // Handle deleted players
+      if (!game.player1 || !game.player2) {
+        return res
+          .status(410)
+          .json({ message: "Game data incomplete - player accounts deleted" });
+      }
+
       const isPlayer1 = game.player1._id.toString() === myId;
       if (!isPlayer1 && game.player2._id.toString() !== myId) {
         return res.status(403).json({ message: "Unauthorized" });
@@ -363,12 +404,14 @@ exports.getGameDetail = async (req, res) => {
 
       formatted = {
         ...formatPVPRow(game, myId),
-        questionHistory:  game.questionHistory  || [],
-        emojiHistory:     game.emojiHistory      || [],
-        gameDuration:     game.gameDuration,
-        analysis:         { status: "coming_soon", message: "Analysis feature coming soon!" },
+        questionHistory: game.questionHistory || [],
+        emojiHistory: game.emojiHistory || [],
+        gameDuration: game.gameDuration,
+        analysis: {
+          status: "coming_soon",
+          message: "Analysis feature coming soon!",
+        },
       };
-
     } else if (gameMode === "computer") {
       game = await ComputerGame.findById(gameId).lean();
 
@@ -380,10 +423,12 @@ exports.getGameDetail = async (req, res) => {
       formatted = {
         ...formatComputerRow(game),
         questionHistory: game.questionHistory || [],
-        gameDuration:    game.gameDuration,
-        analysis:        { status: "coming_soon", message: "Analysis feature coming soon!" },
+        gameDuration: game.gameDuration,
+        analysis: {
+          status: "coming_soon",
+          message: "Analysis feature coming soon!",
+        },
       };
-
     } else if (gameMode === "practice") {
       game = await PracticeGame.findById(gameId).lean();
 
@@ -395,12 +440,16 @@ exports.getGameDetail = async (req, res) => {
       formatted = {
         ...formatPracticeRow(game),
         questionHistory: game.questionHistory || [],
-        gameDuration:    game.gameDuration,
-        analysis:        { status: "coming_soon", message: "Analysis feature coming soon!" },
+        gameDuration: game.gameDuration,
+        analysis: {
+          status: "coming_soon",
+          message: "Analysis feature coming soon!",
+        },
       };
-
     } else {
-      return res.status(400).json({ message: "Invalid gameMode. Use: pvp | computer | practice" });
+      return res
+        .status(400)
+        .json({ message: "Invalid gameMode. Use: pvp | computer | practice" });
     }
 
     return res.json({ success: true, game: formatted });
