@@ -38,10 +38,17 @@ async function savePVPGameToDatabase(gameData) {
       ratingChanges,
       correctAnswers,
       endReason,
-      ratingBeforePlayer1,
-      ratingBeforePlayer2,
       isFriendMatch,
     } = gameData;
+
+    // Fetch fresh player ratings from database to get current ratings
+    const [player1, player2] = await Promise.all([
+      Player.findById(player1Id),
+      Player.findById(player2Id),
+    ]);
+
+    const ratingBeforePlayer1 = player1?.pr?.pvp?.[diffCode] || 1000;
+    const ratingBeforePlayer2 = player2?.pr?.pvp?.[diffCode] || 1000;
 
     let result = "Draw";
     let winner = null;
@@ -76,8 +83,8 @@ async function savePVPGameToDatabase(gameData) {
       timer: timer || 60,
       questionHistory: questionHistory || [],
       emojiHistory: emojiHistory || [],
-      ratingBeforePlayer1: ratingBeforePlayer1 || 0,
-      ratingBeforePlayer2: ratingBeforePlayer2 || 0,
+      ratingBeforePlayer1: ratingBeforePlayer1,
+      ratingBeforePlayer2: ratingBeforePlayer2,
       ratingChangePlayer1: ratingChanges?.[0] || 0,
       ratingChangePlayer2: ratingChanges?.[1] || 0,
       isFriendMatch: isFriendMatch || false,
@@ -911,8 +918,6 @@ class GameRoom {
         player2: p2.correctAnswers,
       },
       endReason: gameResults.gameStats.endReason,
-      ratingBeforePlayer1: this.players[0].rating,
-      ratingBeforePlayer2: this.players[1].rating,
       isFriendMatch: this.isFriendMatch || false,
     });
   }
