@@ -508,7 +508,7 @@ class PVPChallengeController {
       player2.symbol = settings.symbol;
 
       // Create game room
-      const gameRoom = this.gameRoomManager.createGameRoom([player1, player2]);
+      const gameRoom = this.gameRoomManager.createGameRoom([player1, player2], { isFriendMatch: true });
 
       // Mark players as in game
       player1.isInGame = true;

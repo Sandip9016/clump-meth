@@ -17,7 +17,7 @@ class GameRoomManager {
     };
   }
 
-  createGameRoom(players) {
+  createGameRoom(players, options = {}) {
     // ✅ Clean up any stale mappings FIRST
     players.forEach((p) => {
       const existingRoomId = this.playerToRoom.get(p.id);
@@ -53,6 +53,9 @@ class GameRoomManager {
     // Create game room
     const gameRoom = new GameRoom(players, this.questionService);
     gameRoom.bindIO(this.io);
+
+    // ✅ Mark if this is a friend challenge match
+    gameRoom.isFriendMatch = options.isFriendMatch || false;
 
     // Store mappings
     this.gameRooms.set(gameRoom.id, gameRoom);

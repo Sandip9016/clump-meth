@@ -122,6 +122,15 @@ const PVPGameSchema = new Schema({
   questionHistory: [QuestionDetailSchema],
   // ✅ NEW: Emoji exchanges during game
   emojiHistory: [EmojiHistorySchema],
+  // ✅ Rating before match started (for history display)
+  ratingBeforePlayer1: {
+    type: Number,
+    default: 0,
+  },
+  ratingBeforePlayer2: {
+    type: Number,
+    default: 0,
+  },
   // ✅ NEW: Rating changes for each player
   ratingChangePlayer1: {
     type: Number,
@@ -130,6 +139,11 @@ const PVPGameSchema = new Schema({
   ratingChangePlayer2: {
     type: Number,
     default: 0,
+  },
+  // ✅ Whether this game was a friend challenge (vs random matchmaking)
+  isFriendMatch: {
+    type: Boolean,
+    default: false,
   },
   playedAt: {
     type: Date,

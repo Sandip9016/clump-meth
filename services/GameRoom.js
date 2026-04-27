@@ -38,6 +38,9 @@ async function savePVPGameToDatabase(gameData) {
       ratingChanges,
       correctAnswers,
       endReason,
+      ratingBeforePlayer1,
+      ratingBeforePlayer2,
+      isFriendMatch,
     } = gameData;
 
     let result = "Draw";
@@ -73,8 +76,11 @@ async function savePVPGameToDatabase(gameData) {
       timer: timer || 60,
       questionHistory: questionHistory || [],
       emojiHistory: emojiHistory || [],
+      ratingBeforePlayer1: ratingBeforePlayer1 || 0,
+      ratingBeforePlayer2: ratingBeforePlayer2 || 0,
       ratingChangePlayer1: ratingChanges?.[0] || 0,
       ratingChangePlayer2: ratingChanges?.[1] || 0,
+      isFriendMatch: isFriendMatch || false,
       playedAt: new Date(),
     });
 
@@ -905,6 +911,9 @@ class GameRoom {
         player2: p2.correctAnswers,
       },
       endReason: gameResults.gameStats.endReason,
+      ratingBeforePlayer1: this.players[0].rating,
+      ratingBeforePlayer2: this.players[1].rating,
+      isFriendMatch: this.isFriendMatch || false,
     });
   }
 

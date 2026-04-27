@@ -1,5 +1,6 @@
 // controller/practiceMatchController.js
 const Player = require("../models/Player");
+const PracticeGame = require("../models/PracticeGame");
 const badgeService = require("../services/BadgeService");
 
 // Practice session logic (unchanged)
@@ -19,10 +20,10 @@ const VALID_DIFF_CODES = ["E2", "E4", "M2", "M4", "H2", "H4"];
 
 /**
  * POST /api/practice/end
- * Body: { diffCode, correctCount, incorrectCount, skippedCount }
+ * Body: { diffCode, correctCount, incorrectCount, skippedCount, questionHistory?, gameDuration? }
  */
 exports.endPracticeSession = async (req, res) => {
-  const { diffCode, correctCount, incorrectCount, skippedCount } = req.body;
+  const { diffCode, correctCount, incorrectCount, skippedCount, questionHistory, gameDuration } = req.body;
 
   const playerId = req.user._id;
   console.log(playerId);
@@ -76,6 +77,29 @@ exports.endPracticeSession = async (req, res) => {
     player.pr.practice[normalizedDiffCode] = newRating;
     await player.save();
 
+    // ✅ Derive difficulty string from diffCode
+    const difficultyMap = { E2: "easy", E4: "easy", M2: "medium", M4: "medium", H2: "hard", H4: "hard" };
+    const difficulty = difficultyMap[normalizedDiffCode] || "easy";
+
+    // ✅ Save PracticeGame document for history
+    const practiceGame = new PracticeGame({
+      player: playerId,
+      diffCode: normalizedDiffCode,
+      difficulty,
+      correctCount,
+      incorrectCount,
+      skippedCount,
+      totalQuestions: total,
+      pointsEarned: points,
+      ratingBefore: currentRating,
+      ratingAfter: newRating,
+      ratingChange: points,
+      questionHistory: questionHistory || [],
+      gameDuration: gameDuration || 0,
+      playedAt: new Date(),
+    });
+    await practiceGame.save();
+
     // ✅ Badge checks — non-blocking
     badgeService.onPracticeGameCompleted(playerId.toString()).then((earned) => {
       if (earned.length > 0) {
@@ -89,6 +113,7 @@ exports.endPracticeSession = async (req, res) => {
       newRating: newRating,
       oldRating: currentRating,
       diffCode: normalizedDiffCode,
+      gameId: practiceGame._id,
       correctPercent: ((correctCount / total) * 100).toFixed(2) + "%",
       incorrectPercent: ((incorrectCount / total) * 100).toFixed(2) + "%",
       skippedPercent: ((skippedCount / total) * 100).toFixed(2) + "%",

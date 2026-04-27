@@ -16,7 +16,13 @@ const adminRoutes = require("./routes/admin");
 const notificationRoutes = require("./routes/notification");
 const computerGameRoutes = require("./routes/computerGame");
 const leaderboardRoutes = require("./routes/leaderboard");
+const historyRoutes = require("./routes/history");
 const notificationScheduler = require("./cronJobs/notification");
+
+// ✅ Ensure all models are registered at startup
+require("./models/PracticeGame");
+require("./models/PVPGame");
+require("./models/ComputerGame");
 
 // ✅ Import badge socket handler and badge service
 const registerBadgeSocket = require("./controller/BadgeSocket");
@@ -56,6 +62,7 @@ app.use("/api/match", matchRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/computer-game", computerGameRoutes);
 app.use("/api/leaderboard", leaderboardRoutes);
+app.use("/api/history", historyRoutes);
 app.use("/api", notificationRoutes);
 
 require("./controller/pvpController")(io);
