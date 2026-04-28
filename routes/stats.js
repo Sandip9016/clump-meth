@@ -4,11 +4,11 @@ const mongoose = require("mongoose");
 const Player = require("../models/Player");
 const auth = require("../middleware/auth");
 
-// ✅ Get All-Time Best Stats
+// ✅ Get All-Time Best Stats with time filtering
 router.get("/all-time/:playerId", auth, async (req, res) => {
   try {
     const { playerId } = req.params;
-    const { mode, diffCode } = req.query;
+    const { time = "alltime", mode, diffCode } = req.query;
 
     // Validate ObjectId
     if (!mongoose.Types.ObjectId.isValid(playerId)) {
@@ -19,9 +19,12 @@ router.get("/all-time/:playerId", auth, async (req, res) => {
       });
     }
 
-    // Find player
+    // Get time range
+    const timeRange = getTimeRange(time);
+
+    // Find player with all stats
     const player = await Player.findById(playerId).select(
-      "allTimeBest username profileImage",
+      "allTimeBest monthlyStats username profileImage",
     );
     if (!player) {
       return res.status(404).json({
@@ -31,12 +34,136 @@ router.get("/all-time/:playerId", auth, async (req, res) => {
       });
     }
 
+    // Filter monthly stats by time range for best achievements in period
+    const timeFilteredStats = player.monthlyStats.filter((stat) => {
+      const statDate = new Date(stat.month);
+      return statDate >= timeRange.start && statDate <= timeRange.end;
+    });
+
     let result = {
       playerId: player._id,
       username: player.username,
       profileImage: player.profileImage,
       practice: {},
       pvp: {},
+    };
+
+    // Helper function to calculate date ranges for time filtering
+    const getTimeRange = (timeFilter) => {
+      const now = new Date();
+      const ranges = {
+        "1week": {
+          start: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+          end: now,
+        },
+        "1month": {
+          start: new Date(now.getFullYear(), now.getMonth(), 1),
+          end: now,
+        },
+        "3months": {
+          start: new Date(now.getFullYear(), now.getMonth() - 3, 1),
+          end: now,
+        },
+        "6months": {
+          start: new Date(now.getFullYear(), now.getMonth() - 6, 1),
+          end: now,
+        },
+        "1year": {
+          start: new Date(now.getFullYear() - 1, 0, 1),
+          end: now,
+        },
+        alltime: {
+          start: new Date(0),
+          end: now,
+        },
+      };
+
+      return ranges[timeFilter] || ranges["alltime"];
+    };
+
+    // Helper to find best achievements in time period
+    const findBestInTimePeriod = (monthlyData, mode, diffCode) => {
+      const filtered = monthlyData.filter(
+        (stat) =>
+          stat.mode === mode && (!diffCode || stat.diffCode === diffCode),
+      );
+
+      if (filtered.length === 0) {
+        return {
+          bestStreak: { value: 0, date: null },
+          bestAccuracy: { value: 0, date: null },
+          bestQuestionsPerSecond: { value: 0, date: null },
+          bestWin: { username: "", rating: 0, date: null },
+          longestStreak: { value: 0, date: null },
+          highestRating: { value: 1000, date: null },
+        };
+      }
+
+      const bestStreak = filtered.reduce(
+        (best, stat) =>
+          stat.bestStreak > best.value
+            ? { value: stat.bestStreak, date: stat.month }
+            : best,
+        { value: 0, date: null },
+      );
+
+      const bestAccuracy = filtered.reduce(
+        (best, stat) =>
+          stat.accuracy > best.value
+            ? { value: stat.accuracy, date: stat.month }
+            : best,
+        { value: 0, date: null },
+      );
+
+      const bestQuestionsPerSecond = filtered.reduce(
+        (best, stat) =>
+          stat.questionsPerSecond > best.value
+            ? { value: stat.questionsPerSecond, date: stat.month }
+            : best,
+        { value: 0, date: null },
+      );
+
+      const result = {
+        bestStreak,
+        bestAccuracy,
+        bestQuestionsPerSecond,
+      };
+
+      if (mode === "pvp") {
+        const bestWin = filtered.reduce(
+          (best, stat) =>
+            stat.bestWin.rating > best.rating
+              ? {
+                  username: stat.bestWin.username,
+                  rating: stat.bestWin.rating,
+                  date: stat.month,
+                }
+              : best,
+          { username: "", rating: 0, date: null },
+        );
+
+        const longestStreak = filtered.reduce(
+          (best, stat) =>
+            stat.longestStreak > best.value
+              ? { value: stat.longestStreak, date: stat.month }
+              : best,
+          { value: 0, date: null },
+        );
+
+        const highestRating = filtered.reduce(
+          (best, stat) =>
+            stat.highestRating > best.value
+              ? { value: stat.highestRating, date: stat.month }
+              : best,
+          { value: 1000, date: null },
+        );
+
+        result.bestWin = bestWin;
+        result.longestStreak = longestStreak;
+        result.highestRating = highestRating;
+      }
+
+      return result;
     };
 
     // Helper to format all-time best stats
@@ -87,35 +214,57 @@ router.get("/all-time/:playerId", auth, async (req, res) => {
       return formatted;
     };
 
-    // Filter by mode if specified
+    // Filter by mode if specified - use time-filtered best achievements
     if (mode && mode !== "all") {
       if (mode === "practice") {
         result.practice = diffCode
           ? {
-              [diffCode]: formatAllTimeBest(
-                { [diffCode]: player.allTimeBest.practice[diffCode] },
+              [diffCode]: findBestInTimePeriod(
+                timeFilteredStats,
                 "practice",
-              )[diffCode],
+                diffCode,
+              ),
             }
-          : formatAllTimeBest(player.allTimeBest.practice, "practice");
+          : Object.keys(player.stats.practice).reduce((acc, key) => {
+              acc[key] = findBestInTimePeriod(
+                timeFilteredStats,
+                "practice",
+                key,
+              );
+              return acc;
+            }, {});
       } else if (mode === "pvp") {
         result.pvp = diffCode
           ? {
-              [diffCode]: formatAllTimeBest(
-                { [diffCode]: player.allTimeBest.pvp[diffCode] },
+              [diffCode]: findBestInTimePeriod(
+                timeFilteredStats,
                 "pvp",
-              )[diffCode],
+                diffCode,
+              ),
             }
-          : formatAllTimeBest(player.allTimeBest.pvp, "pvp");
+          : Object.keys(player.stats.pvp).reduce((acc, key) => {
+              acc[key] = findBestInTimePeriod(timeFilteredStats, "pvp", key);
+              return acc;
+            }, {});
       }
     } else {
       result = {
         playerId: player._id,
         username: player.username,
-        practice: formatAllTimeBest(player.allTimeBest.practice, "practice"),
-        pvp: formatAllTimeBest(player.allTimeBest.pvp, "pvp"),
+        profileImage: player.profileImage,
+        practice: Object.keys(player.stats.practice).reduce((acc, key) => {
+          acc[key] = findBestInTimePeriod(timeFilteredStats, "practice", key);
+          return acc;
+        }, {}),
+        pvp: Object.keys(player.stats.pvp).reduce((acc, key) => {
+          acc[key] = findBestInTimePeriod(timeFilteredStats, "pvp", key);
+          return acc;
+        }, {}),
       };
     }
+
+    // Add time filter info to response
+    result.timeFilter = time;
 
     res.json(result);
   } catch (error) {
@@ -131,11 +280,11 @@ router.get("/all-time/:playerId", auth, async (req, res) => {
   }
 });
 
-// ✅ Get Monthly Stats
+// ✅ Get Time-based Stats (replaces monthly stats)
 router.get("/monthly/:playerId", auth, async (req, res) => {
   try {
     const { playerId } = req.params;
-    const { month, mode, diffCode } = req.query;
+    const { time = "alltime", mode, diffCode } = req.query;
 
     // Validate ObjectId
     if (!mongoose.Types.ObjectId.isValid(playerId)) {
@@ -146,9 +295,12 @@ router.get("/monthly/:playerId", auth, async (req, res) => {
       });
     }
 
-    // Find player
+    // Get time range
+    const timeRange = getTimeRange(time);
+
+    // Find player with all stats
     const player = await Player.findById(playerId).select(
-      "monthlyStats username profileImage",
+      "stats allTimeBest monthlyStats username profileImage",
     );
     if (!player) {
       return res.status(404).json({
@@ -158,12 +310,11 @@ router.get("/monthly/:playerId", auth, async (req, res) => {
       });
     }
 
-    let filteredStats = player.monthlyStats;
-
-    // Filter by month if specified
-    if (month) {
-      filteredStats = filteredStats.filter((stat) => stat.month === month);
-    }
+    // Filter monthly stats by time range
+    let filteredStats = player.monthlyStats.filter((stat) => {
+      const statDate = new Date(stat.month);
+      return statDate >= timeRange.start && statDate <= timeRange.end;
+    });
 
     // Filter by mode if specified
     if (mode && mode !== "all") {
@@ -223,10 +374,8 @@ router.get("/monthly/:playerId", auth, async (req, res) => {
       playerId: player._id,
       username: player.username,
       profileImage: player.profileImage,
-      stats: month
-        ? groupedStats[`${month}-${mode || "practice"}-${diffCode || "E2"}`] ||
-          {}
-        : groupedStats,
+      timeFilter: time,
+      stats: Object.keys(groupedStats).length > 0 ? groupedStats : {},
     });
   } catch (error) {
     console.error("Error fetching monthly stats:", error);
@@ -241,11 +390,11 @@ router.get("/monthly/:playerId", auth, async (req, res) => {
   }
 });
 
-// ✅ Get Current Stats (live data)
+// ✅ Get Current Stats with time filtering
 router.get("/current/:playerId", auth, async (req, res) => {
   try {
     const { playerId } = req.params;
-    const { mode, diffCode } = req.query;
+    const { time = "alltime", mode, diffCode } = req.query;
 
     // Validate ObjectId
     if (!mongoose.Types.ObjectId.isValid(playerId)) {
@@ -256,9 +405,12 @@ router.get("/current/:playerId", auth, async (req, res) => {
       });
     }
 
-    // Find player
+    // Get time range
+    const timeRange = getTimeRange(time);
+
+    // Find player with all stats
     const player = await Player.findById(playerId).select(
-      "stats pr username profileImage",
+      "stats allTimeBest monthlyStats pr username profileImage",
     );
     if (!player) {
       return res.status(404).json({
@@ -268,12 +420,86 @@ router.get("/current/:playerId", auth, async (req, res) => {
       });
     }
 
+    // Filter monthly stats by time range for current period stats
+    const timeFilteredStats = player.monthlyStats.filter((stat) => {
+      const statDate = new Date(stat.month);
+      return statDate >= timeRange.start && statDate <= timeRange.end;
+    });
+
     let result = {
       playerId: player._id,
       username: player.username,
       profileImage: player.profileImage,
       practice: {},
       pvp: {},
+    };
+
+    // Aggregate time-filtered monthly stats for current period
+    const aggregateTimeStats = (monthlyData, mode, diffCode) => {
+      const filtered = monthlyData.filter(
+        (stat) =>
+          stat.mode === mode && (!diffCode || stat.diffCode === diffCode),
+      );
+
+      if (filtered.length === 0) {
+        return {
+          gamesPlayed: 0,
+          wins: 0,
+          losses: 0,
+          draws: 0,
+          highScore: 0,
+          totalScore: 0,
+          averageScore: 0,
+          currentStreak: 0,
+          bestStreak: 0,
+          totalCorrect: 0,
+          totalIncorrect: 0,
+          totalSkipped: 0,
+          totalTimeSpent: 0,
+          totalQuestionsAnswered: 0,
+        };
+      }
+
+      const aggregated = filtered.reduce(
+        (acc, stat) => {
+          acc.gamesPlayed += stat.gamesPlayed;
+          acc.wins += stat.wins;
+          acc.losses += stat.losses;
+          acc.draws += stat.draws;
+          acc.highScore = Math.max(acc.highScore, stat.highScore);
+          acc.totalScore += stat.totalScore;
+          acc.bestStreak = Math.max(acc.bestStreak, stat.bestStreak);
+          acc.totalCorrect += stat.totalCorrect;
+          acc.totalIncorrect += stat.totalIncorrect;
+          acc.totalSkipped += stat.totalSkipped;
+          acc.totalTimeSpent += stat.totalTimeSpent;
+          acc.totalQuestionsAnswered += stat.totalQuestionsAnswered;
+          return acc;
+        },
+        {
+          gamesPlayed: 0,
+          wins: 0,
+          losses: 0,
+          draws: 0,
+          highScore: 0,
+          totalScore: 0,
+          averageScore: 0,
+          currentStreak: 0,
+          bestStreak: 0,
+          totalCorrect: 0,
+          totalIncorrect: 0,
+          totalSkipped: 0,
+          totalTimeSpent: 0,
+          totalQuestionsAnswered: 0,
+        },
+      );
+
+      aggregated.averageScore =
+        aggregated.gamesPlayed > 0
+          ? Math.round(aggregated.totalScore / aggregated.gamesPlayed)
+          : 0;
+
+      return aggregated;
     };
 
     // Calculate derived stats
@@ -330,41 +556,56 @@ router.get("/current/:playerId", auth, async (req, res) => {
       };
     };
 
-    // Filter and include stats
+    // Filter and include time-based stats
     if (mode && mode !== "all") {
       if (mode === "practice") {
         result.practice = diffCode
           ? {
               [diffCode]: calculateDerivedStats(
-                player.stats.practice[diffCode],
+                aggregateTimeStats(timeFilteredStats, "practice", diffCode),
               ),
             }
           : Object.keys(player.stats.practice).reduce((acc, key) => {
-              acc[key] = calculateDerivedStats(player.stats.practice[key]);
+              acc[key] = calculateDerivedStats(
+                aggregateTimeStats(timeFilteredStats, "practice", key),
+              );
               return acc;
             }, {});
       } else if (mode === "pvp") {
         result.pvp = diffCode
-          ? { [diffCode]: calculateDerivedStats(player.stats.pvp[diffCode]) }
+          ? {
+              [diffCode]: calculateDerivedStats(
+                aggregateTimeStats(timeFilteredStats, "pvp", diffCode),
+              ),
+            }
           : Object.keys(player.stats.pvp).reduce((acc, key) => {
-              acc[key] = calculateDerivedStats(player.stats.pvp[key]);
+              acc[key] = calculateDerivedStats(
+                aggregateTimeStats(timeFilteredStats, "pvp", key),
+              );
               return acc;
             }, {});
       }
     } else {
       result.practice = Object.keys(player.stats.practice).reduce(
         (acc, key) => {
-          acc[key] = calculateDerivedStats(player.stats.practice[key]);
+          acc[key] = calculateDerivedStats(
+            aggregateTimeStats(timeFilteredStats, "practice", key),
+          );
           return acc;
         },
         {},
       );
 
       result.pvp = Object.keys(player.stats.pvp).reduce((acc, key) => {
-        acc[key] = calculateDerivedStats(player.stats.pvp[key]);
+        acc[key] = calculateDerivedStats(
+          aggregateTimeStats(timeFilteredStats, "pvp", key),
+        );
         return acc;
       }, {});
     }
+
+    // Add time filter info to response
+    result.timeFilter = time;
 
     res.json(result);
   } catch (error) {
@@ -380,11 +621,11 @@ router.get("/current/:playerId", auth, async (req, res) => {
   }
 });
 
-// ✅ Get Stats Summary (combined view)
+// ✅ Get Stats Summary (combined view) with time filtering
 router.get("/summary/:playerId", auth, async (req, res) => {
   try {
     const { playerId } = req.params;
-    const { month, mode, diffCode } = req.query;
+    const { time = "alltime", month, mode, diffCode } = req.query;
 
     // Validate ObjectId
     if (!mongoose.Types.ObjectId.isValid(playerId)) {
@@ -395,7 +636,10 @@ router.get("/summary/:playerId", auth, async (req, res) => {
       });
     }
 
-    // Get current stats
+    // Get time range
+    const timeRange = getTimeRange(time);
+
+    // Get player with all stats
     const player = await Player.findById(playerId).select(
       "stats allTimeBest monthlyStats pr username profileImage",
     );
@@ -406,6 +650,12 @@ router.get("/summary/:playerId", auth, async (req, res) => {
         error: `No player found with ID: ${playerId}`,
       });
     }
+
+    // Filter monthly stats by time range
+    const timeFilteredStats = player.monthlyStats.filter((stat) => {
+      const statDate = new Date(stat.month);
+      return statDate >= timeRange.start && statDate <= timeRange.end;
+    });
 
     const calculateDerivedStats = (stats) => {
       const total =
@@ -444,26 +694,44 @@ router.get("/summary/:playerId", auth, async (req, res) => {
       });
     }
 
-    // Build response
+    // Build response with time-filtered data
     const response = {
       playerId: player._id,
       username: player.username,
       profileImage: player.profileImage,
+      timeFilter: time,
       current: {
         practice: Object.keys(player.stats.practice).reduce((acc, key) => {
           if (!diffCode || key === diffCode) {
-            acc[key] = calculateDerivedStats(player.stats.practice[key]);
+            acc[key] = calculateDerivedStats(
+              aggregateTimeStats(timeFilteredStats, "practice", key),
+            );
           }
           return acc;
         }, {}),
         pvp: Object.keys(player.stats.pvp).reduce((acc, key) => {
           if (!diffCode || key === diffCode) {
-            acc[key] = calculateDerivedStats(player.stats.pvp[key]);
+            acc[key] = calculateDerivedStats(
+              aggregateTimeStats(timeFilteredStats, "pvp", key),
+            );
           }
           return acc;
         }, {}),
       },
-      allTimeBest: player.allTimeBest,
+      allTimeBest: {
+        practice: Object.keys(player.stats.practice).reduce((acc, key) => {
+          if (!diffCode || key === diffCode) {
+            acc[key] = findBestInTimePeriod(timeFilteredStats, "practice", key);
+          }
+          return acc;
+        }, {}),
+        pvp: Object.keys(player.stats.pvp).reduce((acc, key) => {
+          if (!diffCode || key === diffCode) {
+            acc[key] = findBestInTimePeriod(timeFilteredStats, "pvp", key);
+          }
+          return acc;
+        }, {}),
+      },
       ratings: player.pr,
     };
 
