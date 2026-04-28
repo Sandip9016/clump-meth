@@ -17,6 +17,7 @@ const notificationRoutes = require("./routes/notification");
 const computerGameRoutes = require("./routes/computerGame");
 const leaderboardRoutes = require("./routes/leaderboard");
 const historyRoutes = require("./routes/history");
+const statsRoutes = require("./routes/stats");
 const notificationScheduler = require("./cronJobs/notification");
 
 // ✅ Ensure all models are registered at startup
@@ -63,6 +64,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/computer-game", computerGameRoutes);
 app.use("/api/leaderboard", leaderboardRoutes);
 app.use("/api/history", historyRoutes);
+app.use("/api/stats", statsRoutes);
 app.use("/api", notificationRoutes);
 
 require("./controller/pvpController")(io);
