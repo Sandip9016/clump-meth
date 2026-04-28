@@ -21,7 +21,7 @@ router.get("/all-time/:playerId", auth, async (req, res) => {
 
     // Find player
     const player = await Player.findById(playerId).select(
-      "allTimeBest username",
+      "allTimeBest username profileImage",
     );
     if (!player) {
       return res.status(404).json({
@@ -34,6 +34,7 @@ router.get("/all-time/:playerId", auth, async (req, res) => {
     let result = {
       playerId: player._id,
       username: player.username,
+      profileImage: player.profileImage,
       practice: {},
       pvp: {},
     };
@@ -147,7 +148,7 @@ router.get("/monthly/:playerId", auth, async (req, res) => {
 
     // Find player
     const player = await Player.findById(playerId).select(
-      "monthlyStats username",
+      "monthlyStats username profileImage",
     );
     if (!player) {
       return res.status(404).json({
@@ -221,6 +222,7 @@ router.get("/monthly/:playerId", auth, async (req, res) => {
     res.json({
       playerId: player._id,
       username: player.username,
+      profileImage: player.profileImage,
       stats: month
         ? groupedStats[`${month}-${mode || "practice"}-${diffCode || "E2"}`] ||
           {}
@@ -255,7 +257,9 @@ router.get("/current/:playerId", auth, async (req, res) => {
     }
 
     // Find player
-    const player = await Player.findById(playerId).select("stats pr username");
+    const player = await Player.findById(playerId).select(
+      "stats pr username profileImage",
+    );
     if (!player) {
       return res.status(404).json({
         success: false,
@@ -267,6 +271,7 @@ router.get("/current/:playerId", auth, async (req, res) => {
     let result = {
       playerId: player._id,
       username: player.username,
+      profileImage: player.profileImage,
       practice: {},
       pvp: {},
     };
@@ -392,7 +397,7 @@ router.get("/summary/:playerId", auth, async (req, res) => {
 
     // Get current stats
     const player = await Player.findById(playerId).select(
-      "stats allTimeBest monthlyStats pr username",
+      "stats allTimeBest monthlyStats pr username profileImage",
     );
     if (!player) {
       return res.status(404).json({
@@ -443,6 +448,7 @@ router.get("/summary/:playerId", auth, async (req, res) => {
     const response = {
       playerId: player._id,
       username: player.username,
+      profileImage: player.profileImage,
       current: {
         practice: Object.keys(player.stats.practice).reduce((acc, key) => {
           if (!diffCode || key === diffCode) {
