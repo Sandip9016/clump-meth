@@ -23,7 +23,14 @@ const VALID_DIFF_CODES = ["E2", "E4", "M2", "M4", "H2", "H4"];
  * Body: { diffCode, correctCount, incorrectCount, skippedCount, questionHistory?, gameDuration? }
  */
 exports.endPracticeSession = async (req, res) => {
-  const { diffCode, correctCount, incorrectCount, skippedCount, questionHistory, gameDuration } = req.body;
+  const {
+    diffCode,
+    correctCount,
+    incorrectCount,
+    skippedCount,
+    questionHistory,
+    gameDuration,
+  } = req.body;
 
   const playerId = req.user._id;
   console.log(playerId);
@@ -34,7 +41,12 @@ exports.endPracticeSession = async (req, res) => {
   const total = correctCount + incorrectCount + skippedCount;
 
   if (!playerId || !VALID_DIFF_CODES.includes(normalizedDiffCode)) {
-    return res.status(400).json({ message: "Missing or invalid diffCode. Use one of: E2, E4, M2, M4, H2, H4" });
+    return res
+      .status(400)
+      .json({
+        message:
+          "Missing or invalid diffCode. Use one of: E2, E4, M2, M4, H2, H4",
+      });
   }
 
   if (
@@ -81,11 +93,43 @@ exports.endPracticeSession = async (req, res) => {
     // Re-fetch player after save to avoid version conflicts, then call updatePracticeStats
     const freshPlayer = await Player.findById(playerId);
     if (freshPlayer) {
-      await freshPlayer.updatePracticeStats(normalizedDiffCode, points, questionHistory || []);
+      // Use detailed history if sent, otherwise build synthetic one from counts
+      const resolvedHistory =
+        questionHistory && questionHistory.length > 0
+          ? questionHistory
+          : [
+              ...Array(correctCount).fill({
+                isCorrect: true,
+                skipped: false,
+                timeSpent: 0,
+              }),
+              ...Array(incorrectCount).fill({
+                isCorrect: false,
+                skipped: false,
+                timeSpent: 0,
+              }),
+              ...Array(skippedCount).fill({
+                isCorrect: false,
+                skipped: true,
+                timeSpent: 0,
+              }),
+            ];
+      await freshPlayer.updatePracticeStats(
+        normalizedDiffCode,
+        points,
+        resolvedHistory,
+      );
     }
 
     // ✅ Derive difficulty string from diffCode
-    const difficultyMap = { E2: "easy", E4: "easy", M2: "medium", M4: "medium", H2: "hard", H4: "hard" };
+    const difficultyMap = {
+      E2: "easy",
+      E4: "easy",
+      M2: "medium",
+      M4: "medium",
+      H2: "hard",
+      H4: "hard",
+    };
     const difficulty = difficultyMap[normalizedDiffCode] || "easy";
 
     // ✅ Save PracticeGame document for history
@@ -108,11 +152,16 @@ exports.endPracticeSession = async (req, res) => {
     await practiceGame.save();
 
     // ✅ Badge checks — non-blocking
-    badgeService.onPracticeGameCompleted(playerId.toString()).then((earned) => {
-      if (earned.length > 0) {
-        console.log(`🏅 Practice badges earned for ${playerId}: ${earned.map(b => b.title).join(", ")}`);
-      }
-    }).catch(() => {});
+    badgeService
+      .onPracticeGameCompleted(playerId.toString())
+      .then((earned) => {
+        if (earned.length > 0) {
+          console.log(
+            `🏅 Practice badges earned for ${playerId}: ${earned.map((b) => b.title).join(", ")}`,
+          );
+        }
+      })
+      .catch(() => {});
 
     return res.json({
       message: "Practice session ended",
