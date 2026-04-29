@@ -2322,7 +2322,10 @@ playerSchema.methods.updatePvPStats = function (
   }
 
   // ── 2. Question stats from THIS player's responses ───────────────────────
-  let correct = 0, incorrect = 0, skipped = 0, totalTime = 0;
+  let correct = 0,
+    incorrect = 0,
+    skipped = 0,
+    totalTime = 0;
   myQuestionHistory.forEach((r) => {
     totalTime += r.timeSpent || 0;
     if (r.answer === null || r.answer === undefined || r.answer === "") {
@@ -2357,7 +2360,10 @@ playerSchema.methods.updatePvPStats = function (
     allTimeBest.longestStreak.value = diffStats.bestStreak;
     allTimeBest.longestStreak.date = now;
   }
-  if (playerRatingAfter > 0 && playerRatingAfter > allTimeBest.highestRating.value) {
+  if (
+    playerRatingAfter > 0 &&
+    playerRatingAfter > allTimeBest.highestRating.value
+  ) {
     allTimeBest.highestRating.value = playerRatingAfter;
     allTimeBest.highestRating.date = now;
   }
@@ -2387,7 +2393,7 @@ playerSchema.methods.updatePvPStats = function (
     // deltas for this single game
     deltaGamesPlayed: 1,
     deltaWins: won ? 1 : 0,
-    deltaLosses: (!won && !draw) ? 1 : 0,
+    deltaLosses: !won && !draw ? 1 : 0,
     deltaDraws: draw ? 1 : 0,
     deltaCorrect: correct,
     deltaIncorrect: incorrect,
@@ -2409,9 +2415,8 @@ playerSchema.methods.updatePvPStats = function (
       ? { username: opponentUsername, rating: opponentRating, date: now }
       : null,
     longestStreak: { value: diffStats.currentStreak, date: now },
-    highestRating: playerRatingAfter > 0
-      ? { value: playerRatingAfter, date: now }
-      : null,
+    highestRating:
+      playerRatingAfter > 0 ? { value: playerRatingAfter, date: now } : null,
     bestQuestionsPerSecond: { value: questionsPerSecond, date: now },
   };
   this._updateWindowedBests("pvp", diffCode, achievement, now);
@@ -2434,16 +2439,27 @@ playerSchema.methods.updatePracticeStats = function (
   diffStats.gamesPlayed++;
   if (score > diffStats.highScore) diffStats.highScore = score;
   diffStats.totalScore += score;
-  diffStats.averageScore = Math.round(diffStats.totalScore / diffStats.gamesPlayed);
+  diffStats.averageScore = Math.round(
+    diffStats.totalScore / diffStats.gamesPlayed,
+  );
 
   // ── 2. Question stats ────────────────────────────────────────────────────
-  let correct = 0, incorrect = 0, skipped = 0, totalTime = 0;
-  let runStreak = 0, maxStreak = 0;
+  let correct = 0,
+    incorrect = 0,
+    skipped = 0,
+    totalTime = 0;
+  let runStreak = 0,
+    maxStreak = 0;
 
   questionHistory.forEach((q) => {
     const r = q.playerResponse || q;
     totalTime += r.timeSpent || 0;
-    if (r.skipped || r.answer === null || r.answer === undefined || r.answer === "") {
+    if (
+      r.skipped ||
+      r.answer === null ||
+      r.answer === undefined ||
+      r.answer === ""
+    ) {
       skipped++;
       runStreak = 0;
     } else if (r.isCorrect) {
@@ -2508,19 +2524,20 @@ playerSchema.methods.updatePracticeStats = function (
     // running bests inside the monthly entry
     gameScore: score,
     gameMaxStreak: maxStreak,
-    gameAccuracy: questionHistory.length > 0
-      ? (correct / questionHistory.length) * 100
-      : 0,
+    gameAccuracy:
+      questionHistory.length > 0 ? (correct / questionHistory.length) * 100 : 0,
     questionsPerSecond,
   });
 
   // ── 5. Update all windowed best fields ───────────────────────────────────
   const achievement = {
+    bestHighScore: { value: score, date: now },
     bestStreak: { value: maxStreak, date: now },
     bestAccuracy: {
-      value: questionHistory.length > 0
-        ? (correct / questionHistory.length) * 100
-        : 0,
+      value:
+        questionHistory.length > 0
+          ? (correct / questionHistory.length) * 100
+          : 0,
       date: now,
     },
     bestQuestionsPerSecond: { value: questionsPerSecond, date: now },
@@ -2584,7 +2601,12 @@ playerSchema.methods.getProfileSummary = function () {
 };
 
 // ✅ FIXED: Update monthly stats using DELTAS (increments), not cumulative totals
-playerSchema.methods.updateMonthlyStats = function (month, mode, diffCode, data) {
+playerSchema.methods.updateMonthlyStats = function (
+  month,
+  mode,
+  diffCode,
+  data,
+) {
   const idx = this.monthlyStats.findIndex(
     (s) => s.month === month && s.mode === mode && s.diffCode === diffCode,
   );
@@ -2593,28 +2615,34 @@ playerSchema.methods.updateMonthlyStats = function (month, mode, diffCode, data)
     const entry = this.monthlyStats[idx];
 
     // ── Increment delta counters ────────────────────────────────────────────
-    entry.gamesPlayed  += data.deltaGamesPlayed  || 0;
-    entry.totalCorrect += data.deltaCorrect      || 0;
-    entry.totalIncorrect += data.deltaIncorrect  || 0;
-    entry.totalSkipped += data.deltaSkipped      || 0;
-    entry.totalTimeSpent += data.deltaTimeSpent  || 0;
+    entry.gamesPlayed += data.deltaGamesPlayed || 0;
+    entry.totalCorrect += data.deltaCorrect || 0;
+    entry.totalIncorrect += data.deltaIncorrect || 0;
+    entry.totalSkipped += data.deltaSkipped || 0;
+    entry.totalTimeSpent += data.deltaTimeSpent || 0;
     entry.totalQuestionsAnswered += data.deltaQuestionsAnswered || 0;
 
     if (mode === "pvp") {
-      entry.wins  += data.deltaWins  || 0;
+      entry.wins += data.deltaWins || 0;
       entry.losses += data.deltaLosses || 0;
       entry.draws += data.deltaDraws || 0;
 
       // bestWin: keep the highest-rated opponent defeated this month
       if (data.gameWon && data.opponentRating > (entry.bestWin?.rating || 0)) {
-        entry.bestWin = { username: data.opponentUsername, rating: data.opponentRating };
+        entry.bestWin = {
+          username: data.opponentUsername,
+          rating: data.opponentRating,
+        };
       }
       // longestStreak: highest consecutive win streak seen this month
       if ((data.currentStreakAfterGame || 0) > (entry.longestStreak || 0)) {
         entry.longestStreak = data.currentStreakAfterGame;
       }
       // highestRating: highest Elo reached this month
-      if (data.playerRatingAfter > 0 && data.playerRatingAfter > (entry.highestRating || 1000)) {
+      if (
+        data.playerRatingAfter > 0 &&
+        data.playerRatingAfter > (entry.highestRating || 1000)
+      ) {
         entry.highestRating = data.playerRatingAfter;
       }
       // questionsPerSecond: best rate this month
@@ -2648,30 +2676,31 @@ playerSchema.methods.updateMonthlyStats = function (month, mode, diffCode, data)
       month,
       mode,
       diffCode,
-      gamesPlayed:  data.deltaGamesPlayed  || 0,
-      totalCorrect: data.deltaCorrect      || 0,
-      totalIncorrect: data.deltaIncorrect  || 0,
-      totalSkipped: data.deltaSkipped      || 0,
-      totalTimeSpent: data.deltaTimeSpent  || 0,
+      gamesPlayed: data.deltaGamesPlayed || 0,
+      totalCorrect: data.deltaCorrect || 0,
+      totalIncorrect: data.deltaIncorrect || 0,
+      totalSkipped: data.deltaSkipped || 0,
+      totalTimeSpent: data.deltaTimeSpent || 0,
       totalQuestionsAnswered: data.deltaQuestionsAnswered || 0,
     };
 
     if (mode === "pvp") {
-      newEntry.wins  = data.deltaWins  || 0;
+      newEntry.wins = data.deltaWins || 0;
       newEntry.losses = data.deltaLosses || 0;
       newEntry.draws = data.deltaDraws || 0;
       newEntry.bestWin = data.gameWon
         ? { username: data.opponentUsername, rating: data.opponentRating }
         : { username: "", rating: 0 };
       newEntry.longestStreak = data.currentStreakAfterGame || 0;
-      newEntry.highestRating = data.playerRatingAfter > 0 ? data.playerRatingAfter : 1000;
+      newEntry.highestRating =
+        data.playerRatingAfter > 0 ? data.playerRatingAfter : 1000;
       newEntry.questionsPerSecond = data.questionsPerSecond || 0;
     }
 
     if (mode === "practice") {
-      newEntry.highScore  = data.gameScore    || 0;
+      newEntry.highScore = data.gameScore || 0;
       newEntry.bestStreak = data.gameMaxStreak || 0;
-      newEntry.accuracy   = data.gameAccuracy  || 0;
+      newEntry.accuracy = data.gameAccuracy || 0;
       newEntry.questionsPerSecond = data.questionsPerSecond || 0;
     }
 
@@ -2688,14 +2717,19 @@ playerSchema.methods.updateMonthlyStats = function (month, mode, diffCode, data)
 };
 
 // ✅ FIXED: Internal helper — update all windowed best fields (week/month/3m/6m/year/alltime)
-playerSchema.methods._updateWindowedBests = function (mode, diffCode, achievement, now) {
+playerSchema.methods._updateWindowedBests = function (
+  mode,
+  diffCode,
+  achievement,
+  now,
+) {
   const WINDOWS = [
-    { field: "weekBest",        ms: 7  * 24 * 60 * 60 * 1000 },
-    { field: "monthBest",       ms: 30 * 24 * 60 * 60 * 1000 },
+    { field: "weekBest", ms: 7 * 24 * 60 * 60 * 1000 },
+    { field: "monthBest", ms: 30 * 24 * 60 * 60 * 1000 },
     { field: "threeMonthsBest", ms: 90 * 24 * 60 * 60 * 1000 },
-    { field: "sixMonthsBest",   ms: 180 * 24 * 60 * 60 * 1000 },
-    { field: "yearBest",        ms: 365 * 24 * 60 * 60 * 1000 },
-    { field: "allTimeBest",     ms: Infinity },
+    { field: "sixMonthsBest", ms: 180 * 24 * 60 * 60 * 1000 },
+    { field: "yearBest", ms: 365 * 24 * 60 * 60 * 1000 },
+    { field: "allTimeBest", ms: Infinity },
   ];
 
   for (const { field } of WINDOWS) {
@@ -2720,13 +2754,19 @@ playerSchema.methods._updateWindowedBests = function (mode, diffCode, achievemen
         achievement.longestStreak &&
         achievement.longestStreak.value > (bucket.longestStreak?.value || 0)
       ) {
-        bucket.longestStreak = { value: achievement.longestStreak.value, date: now };
+        bucket.longestStreak = {
+          value: achievement.longestStreak.value,
+          date: now,
+        };
       }
       if (
         achievement.highestRating &&
         achievement.highestRating.value > (bucket.highestRating?.value || 1000)
       ) {
-        bucket.highestRating = { value: achievement.highestRating.value, date: now };
+        bucket.highestRating = {
+          value: achievement.highestRating.value,
+          date: now,
+        };
       }
     }
 
@@ -2742,14 +2782,28 @@ playerSchema.methods._updateWindowedBests = function (mode, diffCode, achievemen
         achievement.bestAccuracy &&
         achievement.bestAccuracy.value > (bucket.bestAccuracy?.value || 0)
       ) {
-        bucket.bestAccuracy = { value: achievement.bestAccuracy.value, date: now };
+        bucket.bestAccuracy = {
+          value: achievement.bestAccuracy.value,
+          date: now,
+        };
+      }
+      // Top Score (highest score in a single game)
+      if (
+        achievement.bestHighScore &&
+        achievement.bestHighScore.value > (bucket.bestHighScore?.value || 0)
+      ) {
+        bucket.bestHighScore = {
+          value: achievement.bestHighScore.value,
+          date: now,
+        };
       }
     }
 
     // Common
     if (
       achievement.bestQuestionsPerSecond &&
-      achievement.bestQuestionsPerSecond.value > (bucket.bestQuestionsPerSecond?.value || 0)
+      achievement.bestQuestionsPerSecond.value >
+        (bucket.bestQuestionsPerSecond?.value || 0)
     ) {
       bucket.bestQuestionsPerSecond = {
         value: achievement.bestQuestionsPerSecond.value,
@@ -2762,7 +2816,12 @@ playerSchema.methods._updateWindowedBests = function (mode, diffCode, achievemen
 };
 
 // ✅ KEPT: updateBestStats (public API, kept for any external callers)
-playerSchema.methods.updateBestStats = function (mode, diffCode, newAchievement, _timeFilter) {
+playerSchema.methods.updateBestStats = function (
+  mode,
+  diffCode,
+  newAchievement,
+  _timeFilter,
+) {
   // Delegate to the internal helper which updates ALL windows at once
   this._updateWindowedBests(mode, diffCode, newAchievement, new Date());
   return this.save();
