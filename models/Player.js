@@ -936,6 +936,1268 @@ const playerSchema = new mongoose.Schema(
       },
     ],
 
+    // ✅ NEW: Pre-Computed Best Stats for All Time Periods
+    weekBest: {
+      practice: {
+        E2: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        E4: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        M2: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        M4: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        H2: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        H4: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+      },
+      pvp: {
+        E2: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        E4: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        M2: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        M4: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        H2: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        H4: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+      },
+    },
+    monthBest: {
+      practice: {
+        E2: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        E4: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        M2: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        M4: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        H2: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        H4: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+      },
+      pvp: {
+        E2: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        E4: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        M2: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        M4: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        H2: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        H4: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+      },
+    },
+    threeMonthsBest: {
+      practice: {
+        E2: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        E4: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        M2: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        M4: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        H2: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        H4: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+      },
+      pvp: {
+        E2: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        E4: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        M2: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        M4: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        H2: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        H4: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+      },
+    },
+    sixMonthsBest: {
+      practice: {
+        E2: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        E4: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        M2: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        M4: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        H2: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        H4: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+      },
+      pvp: {
+        E2: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        E4: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        M2: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        M4: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        H2: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        H4: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+      },
+    },
+    yearBest: {
+      practice: {
+        E2: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        E4: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        M2: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        M4: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        H2: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        H4: {
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+      },
+      pvp: {
+        E2: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        E4: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        M2: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        M4: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        H2: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+        H4: {
+          bestWin: {
+            username: { type: String, default: "" },
+            rating: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          longestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          highestRating: {
+            value: { type: Number, default: 1000 },
+            date: { type: Date, default: Date.now },
+          },
+          bestStreak: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestAccuracy: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+          bestQuestionsPerSecond: {
+            value: { type: Number, default: 0 },
+            date: { type: Date, default: Date.now },
+          },
+        },
+      },
+    },
+
     // ✅ NEW: Game Preferences
     preferences: {
       defaultDifficulty: {
@@ -1352,6 +2614,102 @@ playerSchema.methods.updateMonthlyStats = function (
 // ✅ NEW: Update last active timestamp
 playerSchema.methods.updateLastActive = function () {
   this.accountStatus.lastActiveAt = new Date();
+  return this.save();
+};
+
+// ✅ NEW: Update pre-computed best stats for all time periods
+playerSchema.methods.updateBestStats = function (
+  mode,
+  diffCode,
+  newAchievement,
+  timeFilter,
+) {
+  const now = new Date();
+  const timeBestMap = {
+    "1week": "weekBest",
+    "1month": "monthBest",
+    "3months": "threeMonthsBest",
+    "6months": "sixMonthsBest",
+    "1year": "yearBest",
+    alltime: "allTimeBest",
+  };
+
+  const timeField = timeBestMap[timeFilter];
+  if (!timeField) return this;
+
+  // Update the specific time period field
+  if (!this[timeField]) this[timeField] = {};
+  if (!this[timeField][mode]) this[timeField][mode] = {};
+  if (!this[timeField][mode][diffCode]) this[timeField][mode][diffCode] = {};
+
+  const currentBest = this[timeField][mode][diffCode];
+
+  // Update each achievement type if it's better than current
+  if (
+    newAchievement.bestStreak &&
+    newAchievement.bestStreak.value > currentBest.bestStreak.value
+  ) {
+    this[timeField][mode][diffCode].bestStreak = {
+      value: newAchievement.bestStreak.value,
+      date: now,
+    };
+  }
+
+  if (
+    newAchievement.bestAccuracy &&
+    newAchievement.bestAccuracy.value > currentBest.bestAccuracy.value
+  ) {
+    this[timeField][mode][diffCode].bestAccuracy = {
+      value: newAchievement.bestAccuracy.value,
+      date: now,
+    };
+  }
+
+  if (
+    newAchievement.bestQuestionsPerSecond &&
+    newAchievement.bestQuestionsPerSecond.value >
+      currentBest.bestQuestionsPerSecond.value
+  ) {
+    this[timeField][mode][diffCode].bestQuestionsPerSecond = {
+      value: newAchievement.bestQuestionsPerSecond.value,
+      date: now,
+    };
+  }
+
+  // PVP-specific achievements
+  if (mode === "pvp") {
+    if (
+      newAchievement.bestWin &&
+      newAchievement.bestWin.rating > currentBest.bestWin.rating
+    ) {
+      this[timeField][mode][diffCode].bestWin = {
+        username: newAchievement.bestWin.username,
+        rating: newAchievement.bestWin.rating,
+        date: now,
+      };
+    }
+
+    if (
+      newAchievement.longestStreak &&
+      newAchievement.longestStreak.value > currentBest.longestStreak.value
+    ) {
+      this[timeField][mode][diffCode].longestStreak = {
+        value: newAchievement.longestStreak.value,
+        date: now,
+      };
+    }
+
+    if (
+      newAchievement.highestRating &&
+      newAchievement.highestRating.value > currentBest.highestRating.value
+    ) {
+      this[timeField][mode][diffCode].highestRating = {
+        value: newAchievement.highestRating.value,
+        date: now,
+      };
+    }
+  }
+
   return this.save();
 };
 
