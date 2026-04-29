@@ -77,6 +77,13 @@ exports.endPracticeSession = async (req, res) => {
     player.pr.practice[normalizedDiffCode] = newRating;
     await player.save();
 
+    // ✅ FIXED: Update full practice stats (streaks, accuracy, monthly, windowed bests)
+    // Re-fetch player after save to avoid version conflicts, then call updatePracticeStats
+    const freshPlayer = await Player.findById(playerId);
+    if (freshPlayer) {
+      await freshPlayer.updatePracticeStats(normalizedDiffCode, points, questionHistory || []);
+    }
+
     // ✅ Derive difficulty string from diffCode
     const difficultyMap = { E2: "easy", E4: "easy", M2: "medium", M4: "medium", H2: "hard", H4: "hard" };
     const difficulty = difficultyMap[normalizedDiffCode] || "easy";

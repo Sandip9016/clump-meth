@@ -1,523 +1,261 @@
+// routes/stats.js
 const express = require("express");
 const router = express.Router();
 const mongoose = require("mongoose");
 const Player = require("../models/Player");
 const auth = require("../middleware/auth");
 
-// Helper function to calculate date ranges for time filtering
-const getTimeRange = (timeFilter) => {
+const DIFF_CODES = ["E2", "E4", "M2", "M4", "H2", "H4"];
+
+// ── Time window helper ────────────────────────────────────────────────────────
+// Returns the earliest "YYYY-MM" string that belongs to the requested window.
+// Monthly entries are compared lexicographically (safe for ISO "YYYY-MM").
+const getStartMonth = (timeFilter) => {
   const now = new Date();
-  const ranges = {
-    "1week": {
-      start: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
-      end: now,
-    },
-    "1month": {
-      start: new Date(now.getFullYear(), now.getMonth(), 1),
-      end: now,
-    },
-    "3months": {
-      start: new Date(now.getFullYear(), now.getMonth() - 3, 1),
-      end: now,
-    },
-    "6months": {
-      start: new Date(now.getFullYear(), now.getMonth() - 6, 1),
-      end: now,
-    },
-    "1year": {
-      start: new Date(now.getFullYear() - 1, 0, 1),
-      end: now,
-    },
-    alltime: {
-      start: new Date(0),
-      end: now,
-    },
-  };
-
-  return ranges[timeFilter] || ranges["alltime"];
-};
-
-// Helper to get pre-computed best achievements for time period
-const getPreComputedBest = (player, mode, diffCode, timeFilter) => {
-  const timeBestMap = {
-    "1week": player.weekBest,
-    "1month": player.monthBest,
-    "3months": player.threeMonthsBest,
-    "6months": player.sixMonthsBest,
-    "1year": player.yearBest,
-    alltime: player.allTimeBest,
-  };
-
-  const bestData =
-    timeBestMap[timeFilter] &&
-    timeBestMap[timeFilter][mode] &&
-    timeBestMap[timeFilter][mode][diffCode];
-
-  if (!bestData) {
-    return {
-      bestStreak: { value: 0, date: null },
-      bestAccuracy: { value: 0, date: null },
-      bestQuestionsPerSecond: { value: 0, date: null },
-      bestWin: { username: "", rating: 0, date: null },
-      longestStreak: { value: 0, date: null },
-      highestRating: { value: 1000, date: null },
-    };
-  }
-
-  const result = {
-    bestStreak: bestData.bestStreak || { value: 0, date: null },
-    bestAccuracy: bestData.bestAccuracy || { value: 0, date: null },
-    bestQuestionsPerSecond: bestData.bestQuestionsPerSecond || {
-      value: 0,
-      date: null,
-    },
-  };
-
-  if (mode === "pvp") {
-    result.bestWin = bestData.bestWin || {
-      username: "",
-      rating: 0,
-      date: null,
-    };
-    result.longestStreak = bestData.longestStreak || { value: 0, date: null };
-    result.highestRating = bestData.highestRating || {
-      value: 1000,
-      date: null,
-    };
-  }
-
-  return result;
-};
-
-// Helper to find best achievements in time period
-const findBestInTimePeriod = (
-  monthlyData,
-  mode,
-  diffCode,
-  timeFilter,
-  allTimeBestData,
-) => {
-  // For alltime filter, use pre-computed allTimeBest data from database
-  if (timeFilter === "alltime") {
-    const allTimeBest =
-      allTimeBestData &&
-      allTimeBestData[mode] &&
-      allTimeBestData[mode][diffCode];
-
-    if (allTimeBest) {
-      const result = {
-        bestStreak: allTimeBest.bestStreak || { value: 0, date: null },
-        bestAccuracy: allTimeBest.bestAccuracy || { value: 0, date: null },
-        bestQuestionsPerSecond: allTimeBest.bestQuestionsPerSecond || {
-          value: 0,
-          date: null,
-        },
-      };
-
-      if (mode === "pvp") {
-        result.bestWin = allTimeBest.bestWin || {
-          username: "",
-          rating: 0,
-          date: null,
-        };
-        result.longestStreak = allTimeBest.longestStreak || {
-          value: 0,
-          date: null,
-        };
-        result.highestRating = allTimeBest.highestRating || {
-          value: 1000,
-          date: null,
-        };
-      }
-
-      return result;
+  switch (timeFilter) {
+    case "1week": {
+      const d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      return d.toISOString().slice(0, 7);
     }
+    case "1month": {
+      const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      return d.toISOString().slice(0, 7);
+    }
+    case "3months": {
+      const d = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+      return d.toISOString().slice(0, 7);
+    }
+    case "6months": {
+      const d = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+      return d.toISOString().slice(0, 7);
+    }
+    case "1year": {
+      const d = new Date(now.getFullYear() - 1, now.getMonth(), 1);
+      return d.toISOString().slice(0, 7);
+    }
+    case "alltime":
+    default:
+      return "0000-00";
   }
+};
 
-  // For other time filters, calculate from monthly data
+// ── Aggregate delta-based monthly entries ─────────────────────────────────────
+// Each monthly entry stores per-game increments (deltas) + running bests.
+// We SUM the delta counters and MAX the "best" values.
+const aggregateMonthlyStats = (monthlyData, mode, diffCode) => {
   const filtered = monthlyData.filter(
-    (stat) => stat.mode === mode && (!diffCode || stat.diffCode === diffCode),
+    (s) => s.mode === mode && s.diffCode === diffCode,
   );
 
-  if (filtered.length === 0) {
-    return {
-      bestStreak: { value: 0, date: null },
-      bestAccuracy: { value: 0, date: null },
-      bestQuestionsPerSecond: { value: 0, date: null },
-      bestWin: { username: "", rating: 0, date: null },
-      longestStreak: { value: 0, date: null },
-      highestRating: { value: 1000, date: null },
-    };
-  }
+  const zero = {
+    gamesPlayed: 0, wins: 0, losses: 0, draws: 0,
+    totalCorrect: 0, totalIncorrect: 0, totalSkipped: 0,
+    totalTimeSpent: 0, totalQuestionsAnswered: 0,
+    highScore: 0, bestStreak: 0, bestAccuracy: 0, questionsPerSecond: 0,
+    bestWin: { username: "", rating: 0 },
+    longestStreak: 0, highestRating: 1000,
+  };
 
-  const bestStreak = filtered.reduce(
-    (best, stat) =>
-      stat.bestStreak > best.value
-        ? { value: stat.bestStreak, date: stat.month }
-        : best,
-    { value: 0, date: null },
-  );
+  if (filtered.length === 0) return zero;
 
-  const bestAccuracy = filtered.reduce(
-    (best, stat) =>
-      stat.accuracy > best.value
-        ? { value: stat.accuracy, date: stat.month }
-        : best,
-    { value: 0, date: null },
-  );
+  return filtered.reduce((acc, s) => {
+    acc.gamesPlayed            += s.gamesPlayed            || 0;
+    acc.wins                   += s.wins                   || 0;
+    acc.losses                 += s.losses                 || 0;
+    acc.draws                  += s.draws                  || 0;
+    acc.totalCorrect           += s.totalCorrect           || 0;
+    acc.totalIncorrect         += s.totalIncorrect         || 0;
+    acc.totalSkipped           += s.totalSkipped           || 0;
+    acc.totalTimeSpent         += s.totalTimeSpent         || 0;
+    acc.totalQuestionsAnswered += s.totalQuestionsAnswered || 0;
 
-  const bestQuestionsPerSecond = filtered.reduce(
-    (best, stat) =>
-      stat.questionsPerSecond > best.value
-        ? { value: stat.questionsPerSecond, date: stat.month }
-        : best,
-    { value: 0, date: null },
-  );
+    acc.highScore          = Math.max(acc.highScore,         s.highScore          || 0);
+    acc.bestStreak         = Math.max(acc.bestStreak,        s.bestStreak         || 0);
+    acc.bestAccuracy       = Math.max(acc.bestAccuracy,      s.accuracy           || 0);
+    acc.questionsPerSecond = Math.max(acc.questionsPerSecond,s.questionsPerSecond || 0);
 
-  const result = {
-    bestStreak,
-    bestAccuracy,
-    bestQuestionsPerSecond,
+    if (mode === "pvp") {
+      if ((s.bestWin?.rating || 0) > acc.bestWin.rating) {
+        acc.bestWin = { username: s.bestWin.username || "", rating: s.bestWin.rating };
+      }
+      acc.longestStreak = Math.max(acc.longestStreak, s.longestStreak || 0);
+      acc.highestRating = Math.max(acc.highestRating, s.highestRating || 1000);
+    }
+
+    return acc;
+  }, zero);
+};
+
+// ── Calculate display stats from aggregated data ──────────────────────────────
+const calculateDerivedStats = (agg, mode) => {
+  const total = agg.totalCorrect + agg.totalIncorrect + agg.totalSkipped;
+  const questionsPerSecond =
+    agg.totalTimeSpent > 0
+      ? Math.round((agg.totalQuestionsAnswered / (agg.totalTimeSpent / 1000)) * 100) / 100
+      : 0;
+
+  const out = {
+    gamesPlayed:           agg.gamesPlayed,
+    totalCorrect:          agg.totalCorrect,
+    totalIncorrect:        agg.totalIncorrect,
+    totalSkipped:          agg.totalSkipped,
+    totalTimeSpent:        agg.totalTimeSpent,
+    totalQuestionsAnswered:agg.totalQuestionsAnswered,
+    // client requirements: percentage of total questions
+    accuracy:            total > 0 ? Math.round((agg.totalCorrect   / total) * 100) : 0,
+    skippedPercentage:   total > 0 ? Math.round((agg.totalSkipped   / total) * 100) : 0,
+    incorrectPercentage: total > 0 ? Math.round((agg.totalIncorrect / total) * 100) : 0,
+    questionsPerSecond,
   };
 
   if (mode === "pvp") {
-    const bestWin = filtered.reduce(
-      (best, stat) =>
-        stat.bestWin.rating > best.rating
-          ? {
-              username: stat.bestWin.username,
-              rating: stat.bestWin.rating,
-              date: stat.month,
-            }
-          : best,
-      { username: "", rating: 0, date: null },
-    );
-
-    const longestStreak = filtered.reduce(
-      (best, stat) =>
-        stat.longestStreak > best.value
-          ? { value: stat.longestStreak, date: stat.month }
-          : best,
-      { value: 0, date: null },
-    );
-
-    const highestRating = filtered.reduce(
-      (best, stat) =>
-        stat.highestRating > best.value
-          ? { value: stat.highestRating, date: stat.month }
-          : best,
-      { value: 1000, date: null },
-    );
-
-    result.bestWin = bestWin;
-    result.longestStreak = longestStreak;
-    result.highestRating = highestRating;
+    out.wins   = agg.wins;
+    out.losses = agg.losses;
+    out.draws  = agg.draws;
+    out.winRate  = agg.gamesPlayed > 0 ? Math.round((agg.wins   / agg.gamesPlayed) * 100) : 0;
+    out.lossRate = agg.gamesPlayed > 0 ? Math.round((agg.losses / agg.gamesPlayed) * 100) : 0;
+    out.drawRate = agg.gamesPlayed > 0 ? Math.round((agg.draws  / agg.gamesPlayed) * 100) : 0;
   }
 
-  return result;
+  if (mode === "practice") {
+    out.highScore  = agg.highScore;
+    out.bestStreak = agg.bestStreak;
+  }
+
+  return out;
 };
 
-// Helper to aggregate time-filtered stats
-const aggregateTimeStats = (monthlyData, mode, diffCode) => {
-  const filtered = monthlyData.filter(
-    (stat) => stat.mode === mode && (!diffCode || stat.diffCode === diffCode),
-  );
+// ── Read precomputed best from the correct windowed field ─────────────────────
+const getPreComputedBest = (player, mode, diffCode, timeFilter) => {
+  const fieldMap = {
+    "1week":   "weekBest",
+    "1month":  "monthBest",
+    "3months": "threeMonthsBest",
+    "6months": "sixMonthsBest",
+    "1year":   "yearBest",
+    alltime:   "allTimeBest",
+  };
 
-  if (filtered.length === 0) {
+  const bucket = player[fieldMap[timeFilter] || "allTimeBest"]?.[mode]?.[diffCode];
+
+  if (mode === "pvp") {
     return {
-      gamesPlayed: 0,
-      wins: 0,
-      losses: 0,
-      draws: 0,
-      highScore: 0,
-      totalScore: 0,
-      averageScore: 0,
-      currentStreak: 0,
-      bestStreak: 0,
-      totalCorrect: 0,
-      totalIncorrect: 0,
-      totalSkipped: 0,
-      totalTimeSpent: 0,
-      totalQuestionsAnswered: 0,
+      bestWin:               bucket?.bestWin               || { username: "", rating: 0, date: null },
+      longestStreak:         bucket?.longestStreak         || { value: 0, date: null },
+      highestRating:         bucket?.highestRating         || { value: 1000, date: null },
+      bestQuestionsPerSecond:bucket?.bestQuestionsPerSecond|| { value: 0, date: null },
     };
   }
-
-  const aggregated = filtered.reduce(
-    (acc, stat) => {
-      acc.gamesPlayed += stat.gamesPlayed;
-      acc.wins += stat.wins;
-      acc.losses += stat.losses;
-      acc.draws += stat.draws;
-      acc.highScore = Math.max(acc.highScore, stat.highScore);
-      acc.totalScore += stat.totalScore;
-      acc.bestStreak = Math.max(acc.bestStreak, stat.bestStreak);
-      acc.totalCorrect += stat.totalCorrect;
-      acc.totalIncorrect += stat.totalIncorrect;
-      acc.totalSkipped += stat.totalSkipped;
-      acc.totalTimeSpent += stat.totalTimeSpent;
-      acc.totalQuestionsAnswered += stat.totalQuestionsAnswered;
-      return acc;
-    },
-    {
-      gamesPlayed: 0,
-      wins: 0,
-      losses: 0,
-      draws: 0,
-      highScore: 0,
-      totalScore: 0,
-      averageScore: 0,
-      currentStreak: 0,
-      bestStreak: 0,
-      totalCorrect: 0,
-      totalIncorrect: 0,
-      totalSkipped: 0,
-      totalTimeSpent: 0,
-      totalQuestionsAnswered: 0,
-    },
-  );
-
-  aggregated.averageScore =
-    aggregated.gamesPlayed > 0
-      ? Math.round(aggregated.totalScore / aggregated.gamesPlayed)
-      : 0;
-
-  return aggregated;
-};
-
-// Helper to calculate derived stats
-const calculateDerivedStats = (stats) => {
-  const total = stats.totalCorrect + stats.totalIncorrect + stats.totalSkipped;
-  const questionsPerSecond =
-    stats.totalTimeSpent > 0
-      ? Math.round(
-          (stats.totalQuestionsAnswered / (stats.totalTimeSpent / 1000)) * 100,
-        ) / 100
-      : 0;
 
   return {
-    // Basic stats
-    gamesPlayed: stats.gamesPlayed || 0,
-    wins: stats.wins || 0,
-    losses: stats.losses || 0,
-    draws: stats.draws || 0,
-    highScore: stats.highScore || 0,
-    totalScore: stats.totalScore || 0,
-    averageScore: stats.averageScore || 0,
-    currentStreak: stats.currentStreak || 0,
-    bestStreak: stats.bestStreak || 0,
-
-    // Question stats
-    totalCorrect: stats.totalCorrect || 0,
-    totalIncorrect: stats.totalIncorrect || 0,
-    totalSkipped: stats.totalSkipped || 0,
-    totalTimeSpent: stats.totalTimeSpent || 0,
-    totalQuestionsAnswered: stats.totalQuestionsAnswered || 0,
-
-    // Calculated percentages
-    winRate:
-      stats.gamesPlayed > 0
-        ? Math.round((stats.wins / stats.gamesPlayed) * 100)
-        : 0,
-    lossRate:
-      stats.gamesPlayed > 0
-        ? Math.round((stats.losses / stats.gamesPlayed) * 100)
-        : 0,
-    drawRate:
-      stats.gamesPlayed > 0
-        ? Math.round((stats.draws / stats.gamesPlayed) * 100)
-        : 0,
-    accuracy: total > 0 ? Math.round((stats.totalCorrect / total) * 100) : 0,
-    questionsPerSecond: questionsPerSecond,
-    skippedPercentage:
-      total > 0 ? Math.round((stats.totalSkipped / total) * 100) : 0,
-    incorrectPercentage:
-      total > 0 ? Math.round((stats.totalIncorrect / total) * 100) : 0,
+    bestStreak:            bucket?.bestStreak            || { value: 0, date: null },
+    bestAccuracy:          bucket?.bestAccuracy          || { value: 0, date: null },
+    bestQuestionsPerSecond:bucket?.bestQuestionsPerSecond|| { value: 0, date: null },
   };
 };
 
-// ✅ UNIFIED STATS API - Single endpoint for all stats
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/stats/:playerId
+//   ?time=alltime|1week|1month|3months|6months|1year   (default: alltime)
+//   &mode=pvp|practice|all                             (default: all)
+//   &diffCode=E2|E4|M2|M4|H2|H4                       (default: all codes)
+// ─────────────────────────────────────────────────────────────────────────────
 router.get("/:playerId", auth, async (req, res) => {
   try {
     const { playerId } = req.params;
     const { time = "alltime", mode, diffCode } = req.query;
 
-    // Validate ObjectId
     if (!mongoose.Types.ObjectId.isValid(playerId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid player ID format",
-        error: "Player ID must be a valid 24-character hex string",
-      });
+      return res.status(400).json({ success: false, message: "Invalid player ID format" });
     }
 
-    // Validate and normalize parameters
-    const validTimeFilters = [
-      "1week",
-      "1month",
-      "3months",
-      "6months",
-      "1year",
-      "alltime",
-    ];
-    const validModes = ["practice", "pvp", "all"];
-    const validDiffCodes = ["E2", "E4", "M2", "M4", "H2", "H4"];
+    const validTimeFilters = ["1week", "1month", "3months", "6months", "1year", "alltime"];
+    const validModes       = ["practice", "pvp", "all"];
 
-    const normalizedTime = validTimeFilters.includes(time) ? time : "alltime";
-    const normalizedMode = validModes.includes(mode) ? mode : "all";
-    const normalizedDiffCode = validDiffCodes.includes(diffCode)
-      ? diffCode
-      : null;
+    const normalizedTime     = validTimeFilters.includes(time)   ? time   : "alltime";
+    const normalizedMode     = validModes.includes(mode)         ? mode   : "all";
+    const normalizedDiffCode = DIFF_CODES.includes(diffCode)     ? diffCode : null;
 
-    const timeRange = getTimeRange(normalizedTime);
+    const startMonth   = getStartMonth(normalizedTime);
+    const currentMonth = new Date().toISOString().slice(0, 7);
 
-    // Find player with all stats
     const player = await Player.findById(playerId).select(
-      "stats allTimeBest weekBest monthBest threeMonthsBest sixMonthsBest yearBest monthlyStats pr username profileImage",
+      "username profileImage pr stats monthlyStats " +
+      "allTimeBest weekBest monthBest threeMonthsBest sixMonthsBest yearBest",
     );
+
     if (!player) {
-      return res.status(404).json({
-        success: false,
-        message: "Player not found",
-        error: `No player found with ID: ${playerId}`,
-      });
+      return res.status(404).json({ success: false, message: "Player not found" });
     }
 
-    // Filter monthly stats by time range
-    const timeFilteredStats = player.monthlyStats.filter((stat) => {
-      // stat.month is in format "2026-04", so we need to parse it correctly
-      if (!stat.month || typeof stat.month !== "string") return false;
+    // Monthly entries in the requested window
+    const windowedMonthly = player.monthlyStats.filter(
+      (s) => s.month >= startMonth && s.month <= currentMonth,
+    );
 
-      const parts = stat.month.split("-");
-      if (parts.length !== 2) return false;
+    const codesRequested = normalizedDiffCode ? [normalizedDiffCode] : DIFF_CODES;
+    const modesToProcess  = normalizedMode === "all" ? ["pvp", "practice"] : [normalizedMode];
 
-      const [year, month] = parts.map(Number);
-      if (isNaN(year) || isNaN(month) || month < 1 || month > 12) return false;
-
-      const statDate = new Date(year, month - 1, 1); // month-1 because months are 0-indexed
-      if (isNaN(statDate.getTime())) return false;
-
-      return statDate >= timeRange.start && statDate <= timeRange.end;
-    });
-
-    // Build unified response
     const response = {
-      playerId: player._id,
-      username: player.username,
+      playerId:     player._id,
+      username:     player.username,
       profileImage: player.profileImage,
-      timeFilter: normalizedTime,
-      current: {
-        practice: {},
-        pvp: {},
-      },
-      best: {
-        practice: {},
-        pvp: {},
-      },
-      ratings: player.pr || {},
+      timeFilter:   normalizedTime,
+      mode:         normalizedMode,
+      ratings:      player.pr || {},
+      current:      {},
+      best:         {},
     };
 
-    // Process practice stats
-    if (
-      !normalizedMode ||
-      normalizedMode === "all" ||
-      normalizedMode === "practice"
-    ) {
-      const practiceDiffCodes = normalizedDiffCode
-        ? [normalizedDiffCode]
-        : ["E2", "E4", "M2", "M4", "H2", "H4"];
+    for (const m of modesToProcess) {
+      response.current[m] = {};
+      response.best[m]    = {};
 
-      practiceDiffCodes.forEach((code) => {
-        if (player.stats.practice && player.stats.practice[code]) {
-          // Current aggregated stats - fallback to current stats if no monthly data
-          let currentStats;
-          if (timeFilteredStats.length === 0) {
-            // Use current stats as fallback when no monthly data exists
-            currentStats = {
-              ...player.stats.practice[code],
-              // Add missing fields for consistency
-              wins: 0,
-              losses: 0,
-              draws: 0,
-              totalCorrect: 0,
-              totalIncorrect: 0,
-              totalSkipped: 0,
-              totalTimeSpent: 0,
-              totalQuestionsAnswered: 0,
-            };
-          } else {
-            currentStats = aggregateTimeStats(
-              timeFilteredStats,
-              "practice",
-              code,
-            );
-          }
-          response.current.practice[code] = calculateDerivedStats(currentStats);
+      for (const code of codesRequested) {
+        const agg = aggregateMonthlyStats(windowedMonthly, m, code);
+        response.current[m][code] = calculateDerivedStats(agg, m);
+        response.best[m][code]    = getPreComputedBest(player, m, code, normalizedTime);
+      }
 
-          // Best achievements in time period
-          response.best.practice[code] = getPreComputedBest(
-            player,
-            "practice",
-            code,
-            normalizedTime,
-          );
-        }
-      });
+      // When no specific diffCode is requested, also provide an "all" rollup
+      if (!normalizedDiffCode) {
+        const rollup = DIFF_CODES.reduce(
+          (acc, code) => {
+            const c = response.current[m][code];
+            acc.gamesPlayed            += c.gamesPlayed            || 0;
+            acc.totalCorrect           += c.totalCorrect           || 0;
+            acc.totalIncorrect         += c.totalIncorrect         || 0;
+            acc.totalSkipped           += c.totalSkipped           || 0;
+            acc.totalTimeSpent         += c.totalTimeSpent         || 0;
+            acc.totalQuestionsAnswered += c.totalQuestionsAnswered || 0;
+            if (m === "pvp") {
+              acc.wins   += c.wins   || 0;
+              acc.losses += c.losses || 0;
+              acc.draws  += c.draws  || 0;
+            }
+            if (m === "practice") {
+              acc.highScore  = Math.max(acc.highScore  || 0, c.highScore  || 0);
+              acc.bestStreak = Math.max(acc.bestStreak || 0, c.bestStreak || 0);
+            }
+            return acc;
+          },
+          {
+            gamesPlayed: 0, totalCorrect: 0, totalIncorrect: 0, totalSkipped: 0,
+            totalTimeSpent: 0, totalQuestionsAnswered: 0,
+            wins: 0, losses: 0, draws: 0, highScore: 0, bestStreak: 0,
+          },
+        );
+        response.current[m]["all"] = calculateDerivedStats(rollup, m);
+      }
     }
 
-    // Process PVP stats
-    if (
-      !normalizedMode ||
-      normalizedMode === "all" ||
-      normalizedMode === "pvp"
-    ) {
-      const pvpDiffCodes = normalizedDiffCode
-        ? [normalizedDiffCode]
-        : ["E2", "E4", "M2", "M4", "H2", "H4"];
-
-      pvpDiffCodes.forEach((code) => {
-        if (player.stats.pvp && player.stats.pvp[code]) {
-          // Current aggregated stats - fallback to current stats if no monthly data
-          let currentStats;
-          if (timeFilteredStats.length === 0) {
-            // Use current stats as fallback when no monthly data exists
-            currentStats = {
-              ...player.stats.pvp[code],
-              // Add missing fields for consistency
-              highScore: 0,
-              totalScore: 0,
-              averageScore: 0,
-              totalCorrect: 0,
-              totalIncorrect: 0,
-              totalSkipped: 0,
-              totalTimeSpent: 0,
-              totalQuestionsAnswered: 0,
-            };
-          } else {
-            currentStats = aggregateTimeStats(timeFilteredStats, "pvp", code);
-          }
-          response.current.pvp[code] = calculateDerivedStats(currentStats);
-
-          // Best achievements in time period
-          response.best.pvp[code] = getPreComputedBest(
-            player,
-            "pvp",
-            code,
-            normalizedTime,
-          );
-        }
-      });
-    }
-
-    res.json(response);
+    return res.json(response);
   } catch (error) {
     console.error("Error fetching stats:", error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Server error while fetching stats",
-      error:
-        process.env.NODE_ENV === "development"
-          ? error.message
-          : "Internal server error",
+      error: process.env.NODE_ENV === "development" ? error.message : "Internal server error",
     });
   }
 });

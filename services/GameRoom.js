@@ -413,7 +413,29 @@ class GameRoom {
         try {
           const won = playerResult.playerId === remainingPlayer.id;
           const p = await Player.findById(playerResult.playerId);
-          if (p) await p.updatePvPStats(this.diffCode, won);
+          if (!p) return;
+
+          // Find opponent
+          const opponent = gameResults.players.find(
+            (r) => r.playerId !== playerResult.playerId,
+          );
+
+          // Extract THIS player's own responses from question history
+          const isPlayer1 = playerResult.playerId === this.players[0].id;
+          const myResponses = this.detailedQuestionHistory.map((q) => {
+            const r = isPlayer1 ? q.player1Response : q.player2Response;
+            return r || { isCorrect: false, timeSpent: 0, answer: null };
+          });
+
+          await p.updatePvPStats(
+            this.diffCode,
+            won,
+            false, // disconnect is never a draw
+            opponent?.currentRating || 0,
+            opponent?.username || "",
+            myResponses,
+            playerResult.newRating || 0,
+          );
           await badgeService.onPvPGameCompleted(playerResult.playerId);
         } catch (err) {
           console.error(
@@ -840,7 +862,36 @@ class GameRoom {
       gameResults.players.map(async (playerResult) => {
         try {
           const p = await Player.findById(playerResult.playerId);
-          if (p) await p.updatePvPStats(this.diffCode, playerResult.won);
+          if (!p) return;
+
+          // Find opponent
+          const opponent = gameResults.players.find(
+            (r) => r.playerId !== playerResult.playerId,
+          );
+
+          // Extract THIS player's own responses from the shared question history
+          const isPlayer1 = playerResult.playerId === this.players[0].id;
+          const myResponses = this.detailedQuestionHistory.map((q) => {
+            const r = isPlayer1 ? q.player1Response : q.player2Response;
+            return r || { isCorrect: false, timeSpent: 0, answer: null };
+          });
+
+          // Determine draw: both players have same score
+          const isDraw =
+            !playerResult.won &&
+            gameResults.players.every(
+              (r) => r.finalScore === playerResult.finalScore,
+            );
+
+          await p.updatePvPStats(
+            this.diffCode,
+            playerResult.won,
+            isDraw,
+            opponent?.currentRating || 0,
+            opponent?.username || "",
+            myResponses,
+            playerResult.newRating || 0,
+          );
           // badges run after stats are saved — no stale read
           await badgeService.onPvPGameCompleted(playerResult.playerId);
         } catch (err) {
