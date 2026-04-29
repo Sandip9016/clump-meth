@@ -435,10 +435,12 @@ class GameRoom {
             this.detailedQuestionHistory[0],
           );
 
-          const myResponses = this.detailedQuestionHistory.map((q) => {
-            const r = isPlayer1 ? q.player1Response : q.player2Response;
-            return r || { isCorrect: false, timeSpent: 0, answer: null };
-          });
+          const myResponses = this.detailedQuestionHistory
+            .filter((q) => q !== undefined && q !== null) // Filter out null entries
+            .map((q) => {
+              const r = isPlayer1 ? q.player1Response : q.player2Response;
+              return r || { isCorrect: false, timeSpent: 0, answer: null };
+            });
 
           console.log(`My Responses Length: ${myResponses.length}`);
           console.log(`Sample My Response:`, myResponses[0]);
@@ -788,13 +790,13 @@ class GameRoom {
     ps.totalTime += timeSpent;
 
     // ✅ Track question history with player response
-    let historyQuestion = this.detailedQuestionHistory.find(
-      (qh) => qh.questionId === q.id,
-    );
+    // Use question index instead of question ID since q.id might be undefined
+    let historyQuestion = this.detailedQuestionHistory[idx];
 
     if (!historyQuestion) {
       historyQuestion = {
-        questionId: q.id,
+        questionIndex: idx,
+        questionId: q.id || `question_${idx}`,
         question: q.question,
         options: q.options || [],
         correctAnswer: q.answer,
@@ -803,7 +805,7 @@ class GameRoom {
         player1Response: null,
         player2Response: null,
       };
-      this.detailedQuestionHistory.push(historyQuestion);
+      this.detailedQuestionHistory[idx] = historyQuestion;
     }
 
     // Update player response
@@ -902,10 +904,12 @@ class GameRoom {
             this.detailedQuestionHistory[0],
           );
 
-          const myResponses = this.detailedQuestionHistory.map((q) => {
-            const r = isPlayer1 ? q.player1Response : q.player2Response;
-            return r || { isCorrect: false, timeSpent: 0, answer: null };
-          });
+          const myResponses = this.detailedQuestionHistory
+            .filter((q) => q !== undefined && q !== null) // Filter out null entries
+            .map((q) => {
+              const r = isPlayer1 ? q.player1Response : q.player2Response;
+              return r || { isCorrect: false, timeSpent: 0, answer: null };
+            });
 
           console.log(`My Responses Length: ${myResponses.length}`);
           console.log(`Sample My Response:`, myResponses[0]);
