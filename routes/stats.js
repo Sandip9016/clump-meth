@@ -513,12 +513,4 @@ router.get("/:playerId", auth, async (req, res) => {
   }
 });
 
-// Export helper functions for testing
-module.exports = {
-  router,
-  getStartMonth,
-  aggregateMonthlyStats,
-  buildCurrentStats,
-  buildBestStats,
-  buildRatings,
-};
+module.exports = router;
