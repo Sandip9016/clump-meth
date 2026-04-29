@@ -422,10 +422,28 @@ class GameRoom {
 
           // Extract THIS player's own responses from question history
           const isPlayer1 = playerResult.playerId === this.players[0].id;
+
+          // DEBUG: Log what we're working with
+          console.log(`=== DISCONNECT QUESTION HISTORY EXTRACTION DEBUG ===`);
+          console.log(`Player: ${playerResult.playerId} (${p.username})`);
+          console.log(`Is Player1: ${isPlayer1}`);
+          console.log(
+            `Detailed Question History Length: ${this.detailedQuestionHistory.length}`,
+          );
+          console.log(
+            `Sample Question from History:`,
+            this.detailedQuestionHistory[0],
+          );
+
           const myResponses = this.detailedQuestionHistory.map((q) => {
             const r = isPlayer1 ? q.player1Response : q.player2Response;
             return r || { isCorrect: false, timeSpent: 0, answer: null };
           });
+
+          console.log(`My Responses Length: ${myResponses.length}`);
+          console.log(`Sample My Response:`, myResponses[0]);
+          console.log(`All My Responses:`, myResponses);
+          console.log(`===================================================`);
 
           await p.updatePvPStats(
             this.diffCode,
@@ -871,10 +889,28 @@ class GameRoom {
 
           // Extract THIS player's own responses from the shared question history
           const isPlayer1 = playerResult.playerId === this.players[0].id;
+
+          // DEBUG: Log what we're working with
+          console.log(`=== QUESTION HISTORY EXTRACTION DEBUG ===`);
+          console.log(`Player: ${playerResult.playerId} (${p.username})`);
+          console.log(`Is Player1: ${isPlayer1}`);
+          console.log(
+            `Detailed Question History Length: ${this.detailedQuestionHistory.length}`,
+          );
+          console.log(
+            `Sample Question from History:`,
+            this.detailedQuestionHistory[0],
+          );
+
           const myResponses = this.detailedQuestionHistory.map((q) => {
             const r = isPlayer1 ? q.player1Response : q.player2Response;
             return r || { isCorrect: false, timeSpent: 0, answer: null };
           });
+
+          console.log(`My Responses Length: ${myResponses.length}`);
+          console.log(`Sample My Response:`, myResponses[0]);
+          console.log(`All My Responses:`, myResponses);
+          console.log(`========================================`);
 
           // Determine draw: both players have same score
           const isDraw =
