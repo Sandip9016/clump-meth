@@ -240,7 +240,7 @@ const calculateDerivedStats = (stats) => {
 };
 
 // ✅ UNIFIED STATS API - Single endpoint for all stats
-router.get("/stats/:playerId", auth, async (req, res) => {
+router.get("/:playerId", auth, async (req, res) => {
   try {
     const { playerId } = req.params;
     const { time = "alltime", mode, diffCode } = req.query;
