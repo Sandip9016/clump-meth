@@ -120,17 +120,17 @@ const buildCurrentStats = (agg, mode) => {
   const totalAnswered =
     agg.totalCorrect + agg.totalIncorrect + agg.totalSkipped;
 
-  // Questions / Second
-  // Primary path: derive from accumulated totals (covers whole period).
-  // Fallback:     use the best single-game rate we stored in monthly entries
-  //               when totalTimeSpent was not recorded (= 0).
+  // Questions / Second (Time per question in seconds)
+  // Requirement: Time taken to answer 1 Question (Correct/ Incorrect/ Skipped)
   let questionsPerSecond = 0;
   if (agg.totalTimeSpent > 0 && agg.totalQuestionsAnswered > 0) {
+    // Calculate average time per question in seconds
     questionsPerSecond =
       Math.round(
-        (agg.totalQuestionsAnswered / (agg.totalTimeSpent / 1000)) * 100,
+        (agg.totalTimeSpent / 1000 / agg.totalQuestionsAnswered) * 100,
       ) / 100;
   } else if (agg.bestQuestionsPerSecond > 0) {
+    // Fallback: use the stored best time per question
     questionsPerSecond = Math.round(agg.bestQuestionsPerSecond * 100) / 100;
   }
 
@@ -333,6 +333,13 @@ router.get("/:playerId", auth, async (req, res) => {
     const { playerId } = req.params;
     const { time = "alltime", mode, diffCode } = req.query;
 
+    // DEBUG: Log request details
+    console.log("=== STATS API DEBUG ===");
+    console.log("Requested playerId:", playerId);
+    console.log("Query params:", { time, mode, diffCode });
+    console.log("Auth user ID:", req.user?._id);
+    console.log("Auth user username:", req.user?.username);
+
     if (!mongoose.Types.ObjectId.isValid(playerId)) {
       return res
         .status(400)
@@ -361,7 +368,15 @@ router.get("/:playerId", auth, async (req, res) => {
         "allTimeBest weekBest monthBest threeMonthsBest sixMonthsBest yearBest",
     );
 
+    // DEBUG: Log player lookup result
+    console.log("Player lookup result:", player ? "FOUND" : "NOT FOUND");
+    if (player) {
+      console.log("Found player username:", player.username);
+      console.log("Monthly stats count:", player.monthlyStats?.length || 0);
+    }
+
     if (!player) {
+      console.log("Returning 404 - Player not found");
       return res
         .status(404)
         .json({ success: false, message: "Player not found" });
@@ -478,6 +493,12 @@ router.get("/:playerId", auth, async (req, res) => {
       }
     }
 
+    // DEBUG: Log final response
+    console.log("Final response keys:", Object.keys(response));
+    console.log("Response playerId:", response.playerId);
+    console.log("Response username:", response.username);
+    console.log("=== END STATS API DEBUG ===");
+
     return res.json(response);
   } catch (error) {
     console.error("Error fetching stats:", error);
@@ -492,4 +513,12 @@ router.get("/:playerId", auth, async (req, res) => {
   }
 });
 
-module.exports = router;
+// Export helper functions for testing
+module.exports = {
+  router,
+  getStartMonth,
+  aggregateMonthlyStats,
+  buildCurrentStats,
+  buildBestStats,
+  buildRatings,
+};

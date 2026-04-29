@@ -2294,6 +2294,27 @@ playerSchema.methods.updatePvPStats = function (
   myQuestionHistory = [], // only this player's responses: [{isCorrect, timeSpent, answer}, ...]
   playerRatingAfter = 0,
 ) {
+  // DEBUG: Log what data we're receiving
+  console.log(`=== PvP STATS UPDATE DEBUG ===`);
+  console.log(`Player: ${this.username}`);
+  console.log(`DiffCode: ${diffCode}`);
+  console.log(`Won: ${won}, Draw: ${draw}`);
+  console.log(`Opponent: ${opponentUsername} (${opponentRating})`);
+  console.log(`Question History Length: ${myQuestionHistory.length}`);
+  if (myQuestionHistory.length > 0) {
+    console.log(`Sample Question:`, myQuestionHistory[0]);
+    console.log(
+      `Correct: ${myQuestionHistory.filter((q) => q.isCorrect === true).length}`,
+    );
+    console.log(
+      `Incorrect: ${myQuestionHistory.filter((q) => q.isCorrect === false).length}`,
+    );
+    console.log(
+      `Skipped: ${myQuestionHistory.filter((q) => q.isCorrect === null || q.answer === null).length}`,
+    );
+  }
+  console.log(`==========================`);
+
   const diffStats = this.stats.pvp[diffCode];
   const now = new Date();
   const currentMonth = now.toISOString().slice(0, 7); // "2026-04"
@@ -2431,6 +2452,26 @@ playerSchema.methods.updatePracticeStats = function (
   score,
   questionHistory = [], // [{playerResponse: {isCorrect, timeSpent, skipped}}, ...]
 ) {
+  // DEBUG: Log what data we're receiving
+  console.log(`=== PRACTICE STATS UPDATE DEBUG ===`);
+  console.log(`Player: ${this.username}`);
+  console.log(`DiffCode: ${diffCode}`);
+  console.log(`Score: ${score}`);
+  console.log(`Question History Length: ${questionHistory.length}`);
+  if (questionHistory.length > 0) {
+    console.log(`Sample Question:`, questionHistory[0]);
+    console.log(
+      `Correct: ${questionHistory.filter((q) => (q.playerResponse || q).isCorrect === true).length}`,
+    );
+    console.log(
+      `Incorrect: ${questionHistory.filter((q) => (q.playerResponse || q).isCorrect === false).length}`,
+    );
+    console.log(
+      `Skipped: ${questionHistory.filter((q) => (q.playerResponse || q).skipped || (q.playerResponse || q).answer === null).length}`,
+    );
+  }
+  console.log(`===============================`);
+
   const diffStats = this.stats.practice[diffCode];
   const now = new Date();
   const currentMonth = now.toISOString().slice(0, 7);
