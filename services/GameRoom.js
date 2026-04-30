@@ -12,6 +12,7 @@ async function updatePlayerRatingInDatabase(playerId, delta, diffCode) {
     if (!player) throw new Error(`Player not found: ${playerId}`);
 
     player.pr.pvp[diffCode] += delta;
+    player._upsertRatingSnapshots();
     await player.save();
 
     return player;

@@ -936,6 +936,38 @@ const playerSchema = new mongoose.Schema(
       },
     ],
 
+    // ✅ Rating Graph: Daily snapshots — 1 per day, kept for 90 days
+    // Used by: 1week (daily pts), 1month (daily pts), 3months (every 3rd day)
+    dailySnapshots: [
+      {
+        date: { type: String, required: true }, // "2026-04-30"
+        pvp: {
+          E2: { type: Number, default: 1000 },
+          E4: { type: Number, default: 1000 },
+          M2: { type: Number, default: 1000 },
+          M4: { type: Number, default: 1000 },
+          H2: { type: Number, default: 1000 },
+          H4: { type: Number, default: 1000 },
+        },
+      },
+    ],
+
+    // ✅ Rating Graph: Biweekly snapshots — 1 per 15 days, kept for 2 years
+    // Used by: 1year (every 15 days pts)
+    biweeklySnapshots: [
+      {
+        date: { type: String, required: true }, // "2026-04-30"
+        pvp: {
+          E2: { type: Number, default: 1000 },
+          E4: { type: Number, default: 1000 },
+          M2: { type: Number, default: 1000 },
+          M4: { type: Number, default: 1000 },
+          H2: { type: Number, default: 1000 },
+          H4: { type: Number, default: 1000 },
+        },
+      },
+    ],
+
     // ✅ NEW: Pre-Computed Best Stats for All Time Periods
     weekBest: {
       practice: {
@@ -2594,6 +2626,75 @@ playerSchema.methods.getRating = function (mode, difficulty) {
   return this.pr[mode][difficulty];
 };
 
+// ✅ Rating Graph: Upsert daily + biweekly snapshots after a pvp game
+// Called internally by updateRating — do NOT call manually
+playerSchema.methods._upsertRatingSnapshots = function () {
+  const today = new Date().toISOString().slice(0, 10); // "2026-04-30"
+
+  const currentPvp = {
+    E2: this.pr.pvp.E2,
+    E4: this.pr.pvp.E4,
+    M2: this.pr.pvp.M2,
+    M4: this.pr.pvp.M4,
+    H2: this.pr.pvp.H2,
+    H4: this.pr.pvp.H4,
+  };
+
+  // ── 1. Daily snapshot: upsert today ──────────────────────────────────────
+  const dailyIdx = this.dailySnapshots.findIndex((s) => s.date === today);
+  if (dailyIdx !== -1) {
+    this.dailySnapshots[dailyIdx].pvp = currentPvp;
+  } else {
+    this.dailySnapshots.push({ date: today, pvp: currentPvp });
+  }
+  // Delete entries older than 90 days
+  const cutoff90 = new Date();
+  cutoff90.setDate(cutoff90.getDate() - 90);
+  const cutoff90Str = cutoff90.toISOString().slice(0, 10);
+  this.dailySnapshots = this.dailySnapshots.filter(
+    (s) => s.date >= cutoff90Str,
+  );
+  this.markModified("dailySnapshots");
+
+  // ── 2. Biweekly snapshot: push only if 15+ days since last entry ─────────
+  const sortedBiweekly = [...this.biweeklySnapshots].sort((a, b) =>
+    b.date.localeCompare(a.date),
+  );
+  const lastBiweekly = sortedBiweekly[0];
+  let shouldPushBiweekly = false;
+
+  if (!lastBiweekly) {
+    shouldPushBiweekly = true;
+  } else {
+    const lastDate = new Date(lastBiweekly.date);
+    const diffDays = Math.floor(
+      (new Date(today) - lastDate) / (1000 * 60 * 60 * 24),
+    );
+    if (diffDays >= 15) shouldPushBiweekly = true;
+  }
+
+  if (shouldPushBiweekly) {
+    this.biweeklySnapshots.push({ date: today, pvp: currentPvp });
+  } else if (this.biweeklySnapshots.length > 0) {
+    // Always update the latest biweekly entry with current ratings
+    // so it reflects end-of-period rating, not start-of-period
+    const latestIdx = this.biweeklySnapshots.reduce(
+      (maxIdx, s, i, arr) => (s.date > arr[maxIdx].date ? i : maxIdx),
+      0,
+    );
+    this.biweeklySnapshots[latestIdx].pvp = currentPvp;
+  }
+
+  // Delete entries older than 2 years
+  const cutoff2yr = new Date();
+  cutoff2yr.setFullYear(cutoff2yr.getFullYear() - 2);
+  const cutoff2yrStr = cutoff2yr.toISOString().slice(0, 10);
+  this.biweeklySnapshots = this.biweeklySnapshots.filter(
+    (s) => s.date >= cutoff2yrStr,
+  );
+  this.markModified("biweeklySnapshots");
+};
+
 // ✅ NEW: Update player's rating
 playerSchema.methods.updateRating = function (mode, difficulty, delta) {
   this.pr[mode][difficulty] += delta;
@@ -2601,6 +2702,11 @@ playerSchema.methods.updateRating = function (mode, difficulty, delta) {
   // Ensure rating doesn't go below 0
   if (this.pr[mode][difficulty] < 0) {
     this.pr[mode][difficulty] = 0;
+  }
+
+  // Update rating graph snapshots for pvp only
+  if (mode === "pvp") {
+    this._upsertRatingSnapshots();
   }
 
   return this.save();
@@ -2748,10 +2854,9 @@ playerSchema.methods.updateMonthlyStats = function (
     this.monthlyStats.push(newEntry);
   }
 
-  // Keep only last 13 months × 2 modes × 6 diffCodes = 156 max entries
   this.monthlyStats.sort((a, b) => b.month.localeCompare(a.month));
-  if (this.monthlyStats.length > 156) {
-    this.monthlyStats = this.monthlyStats.slice(0, 156);
+  if (this.monthlyStats.length > 720) {
+    this.monthlyStats = this.monthlyStats.slice(0, 720);
   }
 
   this.markModified("monthlyStats");

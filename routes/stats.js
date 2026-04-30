@@ -269,6 +269,128 @@ const buildRatings = (pr, diffCode) => {
   };
 };
 
+/**
+ * Build ratingHistory array for the rating graph.
+ *
+ * Sources:
+ *  1week / 1month  → dailySnapshots  (1 pt/day)
+ *  3months         → dailySnapshots  (1 pt every 3 days)
+ *  1year           → biweeklySnapshots (1 pt every 15 days)
+ *  alltime         → monthlyStats.highestRating (pvp, per month, forever)
+ *
+ * For windowed timeframes: generate evenly-spaced date buckets, find the last
+ * snapshot on-or-before each bucket (carry-forward). Ensures clean spacing
+ * even on days where no game was played.
+ */
+const buildRatingHistory = (player, diffCode, timeFilter) => {
+  // ── alltime: derive from existing monthlyStats ───────────────────────────
+  if (timeFilter === "alltime") {
+    const entries = (player.monthlyStats || [])
+      .filter((s) => s.mode === "pvp" && s.diffCode === diffCode)
+      .sort((a, b) => a.month.localeCompare(b.month));
+
+    if (!entries.length) return [];
+
+    return entries.map((s) => ({
+      rating: s.highestRating || 1000,
+      label: new Date(s.month + "-01").toLocaleDateString("en-GB", {
+        month: "short",
+        year: "2-digit",
+      }),
+    }));
+  }
+
+  // ── 1week / 1month / 3months: use dailySnapshots ─────────────────────────
+  if (["1week", "1month", "3months"].includes(timeFilter)) {
+    const now = new Date();
+    const cutoffs = {
+      "1week": new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+      "1month": new Date(now.getFullYear(), now.getMonth() - 1, now.getDate()),
+      "3months": new Date(now.getFullYear(), now.getMonth() - 3, now.getDate()),
+    };
+    const intervalDays = { "1week": 1, "1month": 1, "3months": 3 };
+
+    const cutoff = cutoffs[timeFilter];
+    const interval = intervalDays[timeFilter];
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const todayStr = now.toISOString().slice(0, 10);
+
+    // All daily snapshots in window, sorted asc
+    const available = (player.dailySnapshots || [])
+      .filter((s) => s.date >= cutoffStr)
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    // Generate bucket dates at [interval]-day steps from cutoff → today
+    const buckets = [];
+    const cursor = new Date(cutoff);
+    while (cursor.toISOString().slice(0, 10) <= todayStr) {
+      buckets.push(cursor.toISOString().slice(0, 10));
+      cursor.setDate(cursor.getDate() + interval);
+    }
+    if (buckets[buckets.length - 1] !== todayStr) buckets.push(todayStr);
+
+    // For each bucket: carry-forward last known rating
+    let lastKnownRating = player.pr?.pvp?.[diffCode] || 1000;
+    return buckets.map((bucketDate) => {
+      const candidates = available.filter((s) => s.date <= bucketDate);
+      if (candidates.length) {
+        lastKnownRating =
+          candidates[candidates.length - 1].pvp?.[diffCode] || lastKnownRating;
+      }
+      return {
+        rating: lastKnownRating,
+        label: new Date(bucketDate).toLocaleDateString("en-GB", {
+          day: "2-digit",
+          month: "short",
+        }),
+      };
+    });
+  }
+
+  // ── 1year: use biweeklySnapshots ─────────────────────────────────────────
+  if (timeFilter === "1year") {
+    const now = new Date();
+    const cutoff = new Date(
+      now.getFullYear() - 1,
+      now.getMonth(),
+      now.getDate(),
+    );
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const todayStr = now.toISOString().slice(0, 10);
+
+    const available = (player.biweeklySnapshots || [])
+      .filter((s) => s.date >= cutoffStr)
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    // Generate bucket dates every 15 days across last year
+    const buckets = [];
+    const cursor = new Date(cutoff);
+    while (cursor.toISOString().slice(0, 10) <= todayStr) {
+      buckets.push(cursor.toISOString().slice(0, 10));
+      cursor.setDate(cursor.getDate() + 15);
+    }
+    if (buckets[buckets.length - 1] !== todayStr) buckets.push(todayStr);
+
+    let lastKnownRating = player.pr?.pvp?.[diffCode] || 1000;
+    return buckets.map((bucketDate) => {
+      const candidates = available.filter((s) => s.date <= bucketDate);
+      if (candidates.length) {
+        lastKnownRating =
+          candidates[candidates.length - 1].pvp?.[diffCode] || lastKnownRating;
+      }
+      return {
+        rating: lastKnownRating,
+        label: new Date(bucketDate).toLocaleDateString("en-GB", {
+          day: "2-digit",
+          month: "short",
+        }),
+      };
+    });
+  }
+
+  return [];
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/stats/:playerId
 //
@@ -365,7 +487,8 @@ router.get("/:playerId", auth, async (req, res) => {
 
     const player = await Player.findById(playerId).select(
       "username profileImage pr monthlyStats " +
-        "allTimeBest weekBest monthBest threeMonthsBest sixMonthsBest yearBest",
+        "allTimeBest weekBest monthBest threeMonthsBest sixMonthsBest yearBest " +
+        "dailySnapshots biweeklySnapshots",
     );
 
     // DEBUG: Log player lookup result
@@ -402,6 +525,11 @@ router.get("/:playerId", auth, async (req, res) => {
       diffCode: normalizedDiffCode || "all",
       // Only return ratings for the selected diffCode (or all if none specified)
       ratings: buildRatings(player.pr, normalizedDiffCode),
+      // Rating graph data — only returned when a specific diffCode is requested
+      // and mode includes pvp. Returns [] for alltime if no pvp games played yet.
+      ratingHistory: normalizedDiffCode
+        ? buildRatingHistory(player, normalizedDiffCode, normalizedTime)
+        : null,
       current: {},
       best: {},
     };
